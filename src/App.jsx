@@ -1,4 +1,9 @@
 import { useState, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 // ─── 下單系統 ── 客人端 ──────────────────────────────────────────
 const APP_NAME = "下單系統";
@@ -293,21 +298,52 @@ function MainApp({ lineUser, data, setData }) {
     setToast("已加入");
   };
 
-  const submitOrder = () => {
+  const submitOrder = async () => {
     if (!cart.length) return;
     const no = secureOrderNo();
     const items = cart.map(c=>({ name:sanitize(c.name,100), qty:safeQty(c.qty), price:safePrice(c.price), note:sanitize(c.note||"",200) }));
     const total = items.reduce((s,c)=>s+c.price*c.qty,0);
     if (total<0||total>9_999_999) return;
-    const order = { id:secureUid(), no, customerId:"me", customerName:sanitize(lineUser.name,50)||"匿名", status:"pending_review", items, total, createdAt:today() };
-    setData(d=>({...d,orders:[order,...d.orders]}));
-    setCart([]); setTab("orders");
-    setNotif({ no, items:order.items, total, name:order.customerName });
+    const orderData = {
+      id: secureUid(), no,
+      customer_line_id: lineUser.userId,
+      customer_name: sanitize(lineUser.name,50)||"匿名",
+      status: "pending_review",
+      items, total,
+      created_at: new Date().toISOString(),
+    };
+    try {
+      const { data: saved, error } = await supabase
+        .from("orders").insert([orderData]).select().single();
+      if (error) throw error;
+      setData(d=>({...d, orders:[saved,...d.orders]}));
+      setCart([]); setTab("orders");
+      setNotif({ no, items, total, name: orderData.customer_name });
+    } catch(e) {
+      console.error(e);
+      alert("下單失敗，請稍後再試");
+    }
   };
 
-  const addWish = (name,note) => {
+  const addWish = async (name, note) => {
     const n=sanitize(name,100); if(!n) return;
-    setData(d=>({...d,wishlist:[{id:secureUid(),customerId:"me",name:n,note:sanitize(note,200),status:"searching"},...d.wishlist]}));
+    const wishData = {
+      id: secureUid(),
+      customer_line_id: lineUser.userId,
+      customer_name: sanitize(lineUser.name,50)||"匿名",
+      name: n, note: sanitize(note,200),
+      status: "searching",
+      created_at: new Date().toISOString(),
+    };
+    try {
+      const { data: saved, error } = await supabase
+        .from("wishlist").insert([wishData]).select().single();
+      if (error) throw error;
+      setData(d=>({...d, wishlist:[saved,...d.wishlist]}));
+    } catch(e) {
+      // fallback to local
+      setData(d=>({...d, wishlist:[wishData,...d.wishlist]}));
+    }
     setToast("許願已送出");
   };
 
@@ -909,7 +945,49 @@ ${notif.items.map(it=>`· ${it.name} × ${it.qty}`).join("\n")}
 export default function CustomerRoot() {
   injectStyles();
   const [lineUser, setLineUser] = useState(null);
-  const [data, setData]         = useState(INIT_DATA);
+  const [data, setData]         = useState({ rate:0.26, products:[], inStock:[], orders:[], wishlist:[], announcements:[] });
+  const [loading, setLoading]   = useState(false);
+
+  useEffect(() => {
+    if (!lineUser) return;
+    setLoading(true);
+    Promise.all([
+      supabase.from("products").select("*").eq("status","on").order("created_at",{ascending:false}),
+      supabase.from("in_stock").select("*").eq("status","on").order("created_at",{ascending:false}),
+      supabase.from("announcements").select("*").order("created_at",{ascending:false}),
+      supabase.from("orders").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false}),
+      supabase.from("wishlist").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false}),
+      supabase.from("settings").select("*").eq("key","jpy_rate").single(),
+    ]).then(([p,s,a,o,w,r]) => {
+      setData({
+        products:      p.data||[],
+        inStock:       s.data||[],
+        announcements: a.data||[],
+        orders:        o.data||[],
+        wishlist:      w.data||[],
+        rate:          r.data ? Number(r.data.value) : 0.26,
+      });
+      setLoading(false);
+    }).catch(() => setLoading(false));
+
+    // 即時訂閱：業者改訂單狀態，客人端即時更新
+    const sub = supabase
+      .channel("customer-orders")
+      .on("postgres_changes", { event:"UPDATE", schema:"public", table:"orders",
+        filter:`customer_line_id=eq.${lineUser.userId}` }, payload => {
+        setData(d => ({ ...d, orders: d.orders.map(o => o.id===payload.new.id ? payload.new : o) }));
+      })
+      .subscribe();
+
+    return () => sub.unsubscribe();
+  }, [lineUser?.userId]);
+
   if (!lineUser) return <LineLogin onSuccess={setLineUser} />;
+  if (loading) return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
+      <div style={{ fontSize:28, animation:"spin 1.2s linear infinite", display:"inline-block", color:C.muted }}>◌</div>
+      <div style={{ fontSize:13, color:C.muted, letterSpacing:1 }}>載入中</div>
+    </div>
+  );
   return <MainApp lineUser={lineUser} data={data} setData={setData} />;
 }
