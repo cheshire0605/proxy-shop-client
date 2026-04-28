@@ -286,8 +286,12 @@ function MainApp({ lineUser, data, setData }) {
   const [notif, setNotif]     = useState(null);
   const [member, setMember]   = useState({ ...INIT_MEMBER, name:lineUser.name });
 
-  const myOrders = data.orders.filter(o=>o.customerId==="me");
-  const myWishes = data.wishlist.filter(w=>w.customerId==="me");
+  const myOrders = data.orders.filter(o =>
+    o.customer_line_id === lineUser.userId || o.customerId === "me"
+  );
+  const myWishes = data.wishlist.filter(w =>
+    w.customer_line_id === lineUser.userId || w.customerId === "me"
+  );
 
   const addToCart = item => {
     const safe = { ...item, name:sanitize(item.name,100), price:safePrice(item.price) };
@@ -347,6 +351,8 @@ function MainApp({ lineUser, data, setData }) {
     setToast("許願已送出");
   };
 
+  const [showCart, setShowCart] = useState(false);
+
   const NAV = [
     { id:"home",    label:"公告",  icon:"home"  },
     { id:"instock", label:"現貨",  icon:"store" },
@@ -355,6 +361,14 @@ function MainApp({ lineUser, data, setData }) {
     { id:"member",  label:"會員",  icon:"user"  },
   ];
 
+  const updateCartQty = (id, delta) => {
+    setCart(p => p.map(c => c.id === id
+      ? { ...c, qty: Math.max(1, Math.min(99, c.qty + delta)) }
+      : c
+    ));
+  };
+  const removeFromCart = (id) => setCart(p => p.filter(c => c.id !== id));
+
   return (
     <div style={{ minHeight:"100vh", background:C.bg, maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column" }}>
       {/* Top bar */}
@@ -362,7 +376,7 @@ function MainApp({ lineUser, data, setData }) {
         <div style={{ fontFamily:"'Noto Serif TC',serif", fontSize:15, fontWeight:400, letterSpacing:2.5, color:C.text }}>{APP_NAME}</div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           {cart.length>0 && (
-            <div style={{ background:C.bgDark, color:"#f5f3ef", padding:"3px 10px", fontSize:10, letterSpacing:.5, cursor:"pointer" }} onClick={submitOrder}>
+            <div style={{ background:C.bgDark, color:"#f5f3ef", padding:"3px 10px", fontSize:10, letterSpacing:.5, cursor:"pointer" }} onClick={()=>setShowCart(true)}>
               購物車 {cart.length}
             </div>
           )}
@@ -373,23 +387,98 @@ function MainApp({ lineUser, data, setData }) {
       {/* Content */}
       <div style={{ flex:1, paddingBottom:70, overflowY:"auto" }}>
         {tab==="home"    && <HomeTab    announcements={data.announcements} />}
-        {tab==="instock" && <InStockTab items={data.inStock} cart={cart} onAdd={addToCart} />}
+        {tab==="instock" && <InStockTab items={data.inStock} cart={cart} onAdd={addToCart} rate={data.rate} />}
         {tab==="catalog" && <CatalogTab products={data.products} rate={data.rate} cart={cart} onAdd={addToCart} />}
         {tab==="orders"  && <OrdersTab  orders={myOrders} />}
         {tab==="member"  && <MemberTab  member={member} setMember={setMember} lineUser={lineUser} wishes={myWishes} onAddWish={addWish} />}
       </div>
 
-      {/* Cart sticky bar (only visible on non-member tabs) */}
+      {/* Cart sticky bar */}
       {cart.length>0 && tab!=="member" && (
         <div className="appear" style={{ position:"fixed", bottom:58, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:C.bgDark, color:"#f5f3ef", padding:"12px 20px", display:"flex", alignItems:"center", gap:16, zIndex:150 }}>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:10, color:"rgba(245,243,239,.5)", letterSpacing:.6 }}>購物車 · {cart.length} 項</div>
+          <div style={{ flex:1, cursor:"pointer" }} onClick={()=>setShowCart(true)}>
+            <div style={{ fontSize:10, color:"rgba(245,243,239,.5)", letterSpacing:.6 }}>購物車 · {cart.length} 項　點擊查看明細</div>
             <div style={{ fontSize:14, fontWeight:400, marginTop:2 }}>{fmtMoney(cart.reduce((s,c)=>s+safePrice(c.price)*safeQty(c.qty),0))}</div>
           </div>
           <button onClick={()=>setCart([])} style={{ background:"transparent", border:"1px solid rgba(245,243,239,.25)", color:"rgba(245,243,239,.6)", padding:"6px 12px", fontSize:11, cursor:"pointer", letterSpacing:.4 }}>清空</button>
-          <button onClick={submitOrder} style={{ background:"#f5f3ef", border:"none", color:C.bgDark, padding:"6px 18px", fontSize:12, fontWeight:500, cursor:"pointer", letterSpacing:.4 }}>送出需求</button>
+          <button onClick={()=>setShowCart(true)} style={{ background:"#f5f3ef", border:"none", color:C.bgDark, padding:"6px 18px", fontSize:12, fontWeight:500, cursor:"pointer", letterSpacing:.4 }}>查看購物車</button>
         </div>
       )}
+
+      {/* Cart Review Sheet */}
+      <Sheet open={showCart} onClose={()=>setShowCart(false)} title="購物車明細">
+        <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+          {cart.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"32px 0", color:C.faint, fontSize:13 }}>購物車是空的</div>
+          ) : (
+            <>
+              {/* Cart items */}
+              {cart.map((item, i) => (
+                <div key={item.id}>
+                  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 0" }}>
+                    {/* Image */}
+                    <div style={{ width:48, height:48, background:C.bgDeep, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, flexShrink:0 }}>
+                      {item.image && !item.image.startsWith("data:") ? item.image : "🛒"}
+                    </div>
+                    {/* Info */}
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, fontWeight:500, letterSpacing:.3, color:C.text }}>{item.name}</div>
+                      <div style={{ fontSize:12, color:C.accent, marginTop:3 }}>
+                        {item.price > 0 ? fmtMoney(item.price) : "洽詢"} × {item.qty}
+                        {item.price > 0 && <span style={{ color:C.muted, marginLeft:8 }}>= {fmtMoney(safePrice(item.price)*safeQty(item.qty))}</span>}
+                      </div>
+                    </div>
+                    {/* Qty controls */}
+                    <div style={{ display:"flex", alignItems:"center", gap:0, flexShrink:0 }}>
+                      <button onClick={()=>updateCartQty(item.id,-1)} style={{ width:28, height:28, border:`1px solid ${C.border}`, background:"transparent", color:C.textMid, fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>−</button>
+                      <div style={{ width:32, textAlign:"center", fontSize:13, border:`1px solid ${C.border}`, borderLeft:"none", borderRight:"none", height:28, lineHeight:"28px" }}>{item.qty}</div>
+                      <button onClick={()=>updateCartQty(item.id,1)} style={{ width:28, height:28, border:`1px solid ${C.border}`, background:"transparent", color:C.textMid, fontSize:16, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>+</button>
+                    </div>
+                    {/* Delete */}
+                    <button onClick={()=>removeFromCart(item.id)} style={{ background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer", padding:"0 4px" }}>×</button>
+                  </div>
+                  {i < cart.length-1 && <HR />}
+                </div>
+              ))}
+
+              {/* 備註欄 */}
+              <div style={{ marginTop:16, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+                <div style={{ fontSize:10, color:C.muted, letterSpacing:.8, textTransform:"uppercase", marginBottom:8 }}>備註（選填）</div>
+                <textarea
+                  placeholder="尺寸、顏色、特別需求…"
+                  rows={3}
+                  id="cart-note"
+                  style={{ width:"100%", background:C.bgDeep, border:`1px solid ${C.border}`, padding:"10px 12px", fontSize:13, color:C.text, resize:"none", fontFamily:"'Noto Sans TC',sans-serif", lineHeight:1.7 }}
+                  onFocus={e=>{ e.target.style.borderColor=C.accent; e.target.style.boxShadow=`0 0 0 2px ${C.accent}15`; }}
+                  onBlur={e=>{ e.target.style.borderColor=C.border; e.target.style.boxShadow="none"; }}
+                />
+              </div>
+
+              {/* 合計 */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"16px 0", marginTop:8, borderTop:`1px solid ${C.border}` }}>
+                <div style={{ fontSize:12, color:C.muted, letterSpacing:.5 }}>合計（{cart.length} 項）</div>
+                <div style={{ fontFamily:"'Noto Serif TC',serif", fontSize:20, fontWeight:400, color:C.text }}>
+                  {fmtMoney(cart.reduce((s,c)=>s+safePrice(c.price)*safeQty(c.qty),0))}
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display:"flex", gap:10 }}>
+                <Btn full v="dark" onClick={async ()=>{
+                  setShowCart(false);
+                  await submitOrder();
+                }}>確認送出需求</Btn>
+                <Btn v="outline" sm onClick={()=>setShowCart(false)}>繼續選購</Btn>
+              </div>
+
+              <div style={{ fontSize:10, color:C.faint, textAlign:"center", marginTop:12, letterSpacing:.5, lineHeight:1.8 }}>
+                送出後業者會確認並與您聯繫<br/>
+                代購商品最終價格以業者報價為準
+              </div>
+            </>
+          )}
+        </div>
+      </Sheet>
 
       {/* Bottom nav */}
       <nav className="nav-bar">
@@ -436,297 +525,211 @@ function HomeTab({ announcements }) {
 }
 
 // ─── Product Detail Sheet (standalone component to fix Hook rules) ─
-function ProductDetailSheet({ product, allProducts, cart, onAdd, onClose, CARD_BG }) {
-  const [selVariant, setSelVariant] = useState(product?.variants?.[0] || null);
+function ProductDetailSheet({ product, allProducts, cart, onAdd, onClose, rate }) {
+  const [selVariants, setSelVariants] = useState({});
   const [qty, setQty] = useState(1);
   if (!product) return null;
 
-  const inC = cart.find(c => c.id === product.id);
   const hasVariants = product.variants && product.variants.length > 0;
-  const displayPrice = selVariant?.price > 0 ? selVariant.price : product.price;
-  const bgIdx = allProducts.indexOf(product) % CARD_BG.length;
+  const variantGroups = (() => {
+    if (!hasVariants) return [];
+    const groups = {};
+    product.variants.forEach(v => {
+      const parts = v.name.includes(":") ? v.name.split(":") : ["款式", v.name];
+      const g = parts[0], n = parts[1] || parts[0];
+      if (!groups[g]) groups[g] = [];
+      groups[g].push({ ...v, label: n });
+    });
+    return Object.entries(groups);
+  })();
+  const jpyPrice = product.price || 0;
+  const twdPrice = Math.round(jpyPrice * (rate || 0.26));
+  const allSelected = variantGroups.length === 0 || variantGroups.every(([g]) => selVariants[g]);
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      {/* Image */}
-      <div style={{ background:CARD_BG[bgIdx < 0 ? 0 : bgIdx], aspectRatio:"4/3", display:"flex", alignItems:"center", justifyContent:"center", fontSize:72, margin:"0 -20px" }}>
-        {product.image || <svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth=".8"><rect x="3" y="3" width="18" height="18" rx="0"/><path d="M3 9l4-4 4 4 4-4 4 4"/><path d="M3 15l4 4 4-4 4 4 4-4"/></svg>}
+    <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+      <div style={{ background:"#f5f0ea", aspectRatio:"4/3", display:"flex", alignItems:"center", justifyContent:"center", fontSize:72, margin:"0 -20px -4px", borderRadius:"16px 16px 0 0", overflow:"hidden" }}>
+        {product.image && product.image.startsWith("data:")
+          ? <img src={product.image} alt={product.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+          : product.image
+            ? <span style={{ fontSize:64 }}>{product.image}</span>
+            : <svg width={64} height={64} viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth=".8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><path d="M3 15l4 4 4-4 4 4 4-4"/></svg>}
       </div>
-
-      {/* Name */}
-      <div>
-        <div style={{ fontSize:10, color:C.muted, letterSpacing:.8, marginBottom:5 }}>{sanitize(product.category)}</div>
-        <div style={{ fontFamily:"'Noto Serif TC',serif", fontSize:17, fontWeight:400, letterSpacing:.8, lineHeight:1.6 }}>{sanitize(product.name)}</div>
+      <div style={{ marginTop:16, marginBottom:12 }}>
+        <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>{sanitize(product.category)}</div>
+        <div style={{ fontSize:16, fontWeight:600, lineHeight:1.5, color:C.text }}>{sanitize(product.name)}</div>
       </div>
-      <HR />
-
-      {/* Price */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <span style={{ fontSize:11, color:C.muted, letterSpacing:.6 }}>價格</span>
-        <span style={{ fontSize:18, color:C.text, fontFamily:"'Noto Serif TC',serif" }}>
-          {displayPrice > 0 ? fmtMoney(displayPrice) : "洽詢"}
-        </span>
-      </div>
-
-      {/* Variants */}
-      {hasVariants && (
-        <>
-          <HR />
-          <div>
-            <div style={{ fontSize:10, color:C.muted, letterSpacing:.8, marginBottom:10 }}>款式選擇</div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-              {product.variants.map(v => (
-                <button key={v.id} onClick={() => setSelVariant(v)} style={{
-                  padding:"7px 14px", fontSize:12, letterSpacing:.4, cursor:"pointer",
-                  border:`1px solid ${selVariant?.id===v.id ? C.accent : C.border}`,
-                  background: selVariant?.id===v.id ? C.bgDark : "transparent",
-                  color: selVariant?.id===v.id ? "#f5f3ef" : C.textMid,
-                  transition:"all .15s", fontFamily:"'Noto Sans TC',sans-serif",
-                }}>
-                  {sanitize(v.name)}
-                  {v.price > 0 && v.price !== product.price && (
-                    <span style={{ fontSize:10, marginLeft:6, opacity:.7 }}>+{fmtMoney(v.price)}</span>
-                  )}
-                </button>
-              ))}
-            </div>
+      {jpyPrice > 0 && (
+        <div style={{ background:C.bgDeep, borderRadius:12, padding:"14px 16px", marginBottom:16 }}>
+          <div style={{ fontSize:12, color:C.muted, fontWeight:600, marginBottom:8 }}>訂單資料</div>
+          <div style={{ fontSize:13, color:C.textMid, lineHeight:2 }}>
+            <div>JPY {jpyPrice.toLocaleString()}</div>
+            <div>當日實刷匯率 {rate || 0.26}</div>
+            <div style={{ fontWeight:600, color:C.text, fontSize:15, marginTop:4 }}>預估台幣：NT$ {twdPrice.toLocaleString()}</div>
           </div>
-        </>
+        </div>
       )}
-
-      {/* Quantity */}
-      <HR />
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <span style={{ fontSize:10, color:C.muted, letterSpacing:.8 }}>數量</span>
-        <div style={{ display:"flex", alignItems:"center" }}>
-          <button onClick={() => setQty(q => Math.max(1,q-1))} style={{ width:32, height:32, border:`1px solid ${C.border}`, background:"transparent", color:C.textMid, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>−</button>
-          <div style={{ width:44, textAlign:"center", fontSize:14, border:`1px solid ${C.border}`, borderLeft:"none", borderRight:"none", height:32, lineHeight:"32px" }}>{qty}</div>
-          <button onClick={() => setQty(q => Math.min(99,q+1))} style={{ width:32, height:32, border:`1px solid ${C.border}`, background:"transparent", color:C.textMid, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>+</button>
+      {variantGroups.map(([groupName, options]) => (
+        <div key={groupName} style={{ marginBottom:14 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:C.text, marginBottom:8 }}>{groupName}</div>
+          <div style={{ position:"relative" }}>
+            <select value={selVariants[groupName] || ""} onChange={e => setSelVariants(p => ({ ...p, [groupName]: e.target.value }))}
+              style={{ width:"100%", background:C.surface, border:`1.5px solid ${selVariants[groupName] ? C.accent : C.border}`, borderRadius:10, padding:"11px 36px 11px 14px", fontSize:14, color:selVariants[groupName] ? C.text : C.muted, appearance:"none", cursor:"pointer" }}>
+              <option value="">請選擇{groupName}</option>
+              {options.map(o => <option key={o.id} value={o.label}>{o.label}</option>)}
+            </select>
+            <span style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", color:C.muted, pointerEvents:"none" }}>⌄</span>
+          </div>
+        </div>
+      ))}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:13, fontWeight:600, color:C.text, marginBottom:10 }}>數量</div>
+        <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+          <button onClick={() => setQty(q => Math.max(1,q-1))} style={{ width:40, height:40, borderRadius:"50%", background:C.bgDeep, border:`1.5px solid ${C.border}`, fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:C.textMid }}>−</button>
+          <div style={{ fontSize:18, fontWeight:600, minWidth:32, textAlign:"center" }}>{qty}</div>
+          <button onClick={() => setQty(q => Math.min(99,q+1))} style={{ width:40, height:40, borderRadius:"50%", background:C.bgDeep, border:`1.5px solid ${C.border}`, fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:C.textMid }}>+</button>
+          {jpyPrice > 0 && <div style={{ marginLeft:"auto", fontSize:12, color:C.muted }}>{qty} 件約 <span style={{ color:C.accent, fontWeight:600 }}>NT$ {(twdPrice*qty).toLocaleString()}</span></div>}
         </div>
       </div>
-
-      <HR />
-      <div style={{ fontSize:11, color:C.muted, lineHeight:1.9, letterSpacing:.4 }}>
-        此為代購商品，加入後業者將協助採購。
-      </div>
-
-      {/* Add button */}
-      <div style={{ display:"flex", gap:10, paddingTop:4 }}>
-        <Btn full v={inC ? "green" : "dark"}
-          disabled={hasVariants && !selVariant}
-          onClick={() => {
-            const vLabel = selVariant ? `【${sanitize(selVariant.name)}】` : "";
-            const itemName = `${sanitize(product.name)}${vLabel}`;
-            const itemPrice = safePrice(displayPrice);
-            const cartId = product.id + (selVariant?.id || "");
-            for (let i = 0; i < qty; i++) {
-              onAdd({ ...product, id:cartId, name:itemName, price:itemPrice });
-            }
-            onClose();
-          }}>
-          {hasVariants && !selVariant ? "請選擇款式" : (inC ? <><I k="check" size={13}/> 已在購物車</> : `加入購物車 × ${qty}`)}
-        </Btn>
-        <Btn v="outline" sm onClick={onClose}>關閉</Btn>
-      </div>
+      <button disabled={!allSelected} onClick={() => {
+        const varLabel = Object.entries(selVariants).map(([g,v])=>`${g}：${v}`).join(" / ");
+        const itemName = `${sanitize(product.name)}${varLabel ? ` / ${varLabel}` : ""}`;
+        const cartId = product.id + JSON.stringify(selVariants);
+        for (let i = 0; i < qty; i++) onAdd({ ...product, id:cartId, name:itemName, price:safePrice(jpyPrice) });
+        onClose();
+      }} style={{ width:"100%", padding:"15px", borderRadius:99, background:allSelected?C.accent:C.bgDeep, color:allSelected?"#fff":C.muted, border:"none", fontSize:15, fontWeight:600, cursor:allSelected?"pointer":"not-allowed", transition:"all .2s" }}>
+        {!allSelected ? "請選擇規格" : `加入購物車`}
+      </button>
     </div>
   );
 }
 
-// ─── In-Stock ─────────────────────────────────────────────────────
-function InStockTab({ items, cart, onAdd }) {
+function InStockTab({ items, cart, onAdd, rate }) {
   const [selected, setSelected] = useState(null);
   const inCart = id => cart.find(c => c.id === id);
   const active = items.filter(i => i.status === "on");
-  const CARD_BG = ["#f0ede8","#edf0e8","#e8edf0","#f0eae8","#ede8f0","#f0f0e8"];
-
   return (
     <div style={{ paddingBottom:20 }}>
-      <div style={{ padding:"28px 20px 16px" }}>
-        <SecHead en="In Stock" zh="現 貨" />
-        <div style={{ fontSize:11, color:C.green, letterSpacing:.6, marginTop:-8, marginBottom:4 }}>
-          以下商品現貨在台，可直接購買
-        </div>
+      <div style={{ padding:"20px 16px 12px" }}>
+        <div style={{ fontSize:10, color:C.muted, letterSpacing:1, textTransform:"uppercase", marginBottom:4 }}>IN STOCK</div>
+        <div style={{ fontSize:22, fontWeight:700, color:C.text }}>現貨商品</div>
+        <div style={{ fontSize:12, color:C.green, marginTop:4 }}>現貨在台，可直接購買</div>
       </div>
-
       {!active.length ? (
-        <div style={{ textAlign:"center", padding:"56px 0", color:C.faint, fontSize:12, letterSpacing:1 }}>目前無現貨</div>
+        <div style={{ textAlign:"center", padding:"56px 0", color:C.faint, fontSize:13 }}>目前無現貨</div>
       ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1px", background:C.border }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, padding:"0 12px" }}>
           {active.map((item, i) => {
-            const qty = inCart(item.id)?.qty;
+            const qtyInCart = inCart(item.id)?.qty;
             return (
-              <div key={item.id} className="appear" style={{ animationDelay:`${i*.03}s`, background:C.surface, cursor:"pointer" }}
-                onClick={() => setSelected(item)}>
-                <div style={{ background:CARD_BG[i%CARD_BG.length], aspectRatio:"1/1", display:"flex", alignItems:"center", justifyContent:"center", fontSize:52, position:"relative" }}>
-                  {item.image || <svg width={48} height={48} viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="1"><rect x="3" y="3" width="18" height="18" rx="0"/><path d="M3 9l4-4 4 4 4-4 4 4"/><path d="M3 15l4 4 4-4 4 4 4-4"/></svg>}
-                  <span style={{ position:"absolute", top:8, left:8, fontSize:9, letterSpacing:.6, background:C.green, color:"#fff", padding:"2px 7px" }}>現貨</span>
-                  {qty && <span style={{ position:"absolute", top:8, right:8, background:C.bgDark, color:"#f5f3ef", width:20, height:20, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center" }}>{qty}</span>}
+              <div key={item.id} className="appear" style={{ animationDelay:`${i*.03}s`, background:C.surface, borderRadius:14, overflow:"hidden", boxShadow:"0 1px 8px rgba(0,0,0,.06)", cursor:"pointer" }} onClick={() => setSelected(item)}>
+                <div style={{ background:"#f5f0ea", aspectRatio:"1/1", display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
+                  {item.image && item.image.startsWith("data:") ? <img src={item.image} alt={item.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                    : item.image ? <span style={{ fontSize:36 }}>{item.image}</span>
+                    : <svg width={36} height={36} viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="1"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><path d="M3 15l4 4 4-4 4 4 4-4"/></svg>}
+                  <span style={{ position:"absolute", top:6, left:6, background:C.green, color:"#fff", fontSize:9, padding:"2px 6px", borderRadius:99, fontWeight:600 }}>現貨</span>
+                  {qtyInCart && <span style={{ position:"absolute", top:6, right:6, background:C.accent, color:"#fff", fontSize:10, width:18, height:18, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>{qtyInCart}</span>}
                 </div>
-                <div style={{ padding:"12px 12px 14px" }}>
-                  <div style={{ fontSize:12, letterSpacing:.3, lineHeight:1.5, color:C.text, marginBottom:8, minHeight:36 }}>{sanitize(item.name)}</div>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <div style={{ fontSize:13, color:C.accent, fontWeight:400 }}>{fmtMoney(item.price)}</div>
-                    <button onClick={e => { e.stopPropagation(); onAdd(item); }} style={{
-                      width:28, height:28, background:inCart(item.id)?C.bgDark:C.bgDeep,
-                      border:`1px solid ${inCart(item.id)?C.bgDark:C.border}`,
-                      color:inCart(item.id)?"#f5f3ef":C.textMid,
-                      fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s",
-                    }}>{inCart(item.id) ? <I k="check" size={13}/> : "+"}</button>
-                  </div>
+                <div style={{ padding:"8px 10px 10px" }}>
+                  <div style={{ fontSize:11, lineHeight:1.4, color:C.text, marginBottom:6, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" }}>{sanitize(item.name)}</div>
+                  <div style={{ fontSize:12, color:C.accent, fontWeight:600 }}>NT$ {item.price.toLocaleString()}</div>
                 </div>
               </div>
             );
           })}
         </div>
       )}
-
-      {/* Detail sheet */}
       <Sheet open={!!selected} onClose={() => setSelected(null)} title={selected ? sanitize(selected.name) : ""}>
-        <ProductDetailSheet
-          product={selected}
-          allProducts={active}
-          cart={cart}
-          onAdd={onAdd}
-          onClose={() => setSelected(null)}
-          CARD_BG={CARD_BG}
-        />
+        <ProductDetailSheet product={selected} allProducts={active} cart={cart} onAdd={onAdd} onClose={() => setSelected(null)} rate={rate} />
       </Sheet>
     </div>
   );
 }
 
-// ─── Catalog ─────────────────────────────────────────────────────
 function CatalogTab({ products, rate, cart, onAdd }) {
   const [activeCategory, setActiveCategory] = useState("全部");
-  const [selected, setSelected]             = useState(null); // product detail sheet
-  const [showManual, setShowManual]         = useState(false);
-  const [mName, setMName]                   = useState("");
-  const [mPrice, setMPrice]                 = useState("");
-  const [mNote, setMNote]                   = useState("");
-
+  const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
+  const [showManual, setShowManual] = useState(false);
+  const [mName, setMName] = useState("");
+  const [mPrice, setMPrice] = useState("");
   const inCart = id => cart.find(c => c.id === id);
   const active = products.filter(p => p.status === "on");
   const categories = ["全部", ...Array.from(new Set(active.map(p => p.category).filter(Boolean)))];
-  const filtered = activeCategory === "全部" ? active : active.filter(p => p.category === activeCategory);
-
-  // Pastel background colors for image area (rotates per item)
-  const CARD_BG = ["#f0ede8","#e8ede9","#ede8f0","#f0eae8","#e8edf0","#f0f0e8"];
+  const filtered = active
+    .filter(p => activeCategory === "全部" || p.category === activeCategory)
+    .filter(p => !search || sanitize(p.name).includes(search) || sanitize(p.category).includes(search));
 
   return (
     <div style={{ paddingBottom:20 }}>
-      {/* Header */}
-      <div style={{ padding:"28px 20px 0" }}>
-        <SecHead en="Catalogue" zh="代購目錄" />
+      <div style={{ margin:"16px 12px", background:C.surface, borderRadius:20, padding:"20px 18px", boxShadow:"0 2px 16px rgba(0,0,0,.06)" }}>
+        <div style={{ fontSize:10, color:C.muted, letterSpacing:1.5, textTransform:"uppercase", marginBottom:4 }}>SHOP</div>
+        <div style={{ fontSize:22, fontWeight:700, color:C.text, marginBottom:4 }}>商品下單</div>
+        <div style={{ fontSize:12, color:C.muted }}>選商品、規格與數量後直接送單。</div>
       </div>
-
-      {/* Category pills */}
-      <div style={{ display:"flex", gap:0, overflowX:"auto", padding:"0 20px 16px", scrollbarWidth:"none" }}>
+      <div style={{ display:"flex", gap:8, overflowX:"auto", padding:"0 12px 12px", scrollbarWidth:"none" }}>
         {categories.map(cat => (
-          <button key={cat} onClick={() => setActiveCategory(cat)} style={{
-            padding:"6px 16px", fontSize:11, letterSpacing:.6, fontWeight:400, cursor:"pointer",
-            border:`1px solid ${activeCategory===cat ? C.accent : C.border}`,
-            background: activeCategory===cat ? C.bgDark : "transparent",
-            color: activeCategory===cat ? "#f5f3ef" : C.muted,
-            marginRight:8, whiteSpace:"nowrap", flexShrink:0, fontFamily:"'Noto Sans TC',sans-serif",
-            transition:"all .15s",
-          }}>{cat}</button>
+          <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding:"7px 18px", borderRadius:99, fontSize:12, fontWeight:600, cursor:"pointer", border:`1.5px solid ${activeCategory===cat?C.accent:C.border}`, background:activeCategory===cat?C.accentBg:C.surface, color:activeCategory===cat?C.accent:C.muted, whiteSpace:"nowrap", flexShrink:0, transition:"all .15s" }}>{cat}</button>
         ))}
       </div>
-
-      {/* Product grid */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1px", background:C.border, margin:"0 0 0 0" }}>
-        {filtered.map((p, i) => {
-          const qty = inCart(p.id)?.qty;
-          return (
-            <div key={p.id} className="appear" style={{ animationDelay:`${i*.03}s`, background:C.surface, cursor:"pointer", position:"relative" }}
-              onClick={() => setSelected(p)}>
-              {/* Image area */}
-              <div style={{
-                background: CARD_BG[i % CARD_BG.length],
-                aspectRatio:"1/1", display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:52, position:"relative",
-              }}>
-                {p.image || <svg width={48} height={48} viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="1"><rect x="3" y="3" width="18" height="18" rx="0"/><path d="M3 9l4-4 4 4 4-4 4 4"/><path d="M3 15l4 4 4-4 4 4 4-4"/></svg>}
-
-                {/* Category tag */}
-                <span style={{ position:"absolute", top:8, left:8, fontSize:9, letterSpacing:.6, background:"rgba(28,28,26,.55)", color:"#f5f3ef", padding:"2px 7px" }}>
-                  {sanitize(p.category)}
-                </span>
-
-                {/* In-cart badge */}
-                {qty && (
-                  <span style={{ position:"absolute", top:8, right:8, background:C.bgDark, color:"#f5f3ef", width:20, height:20, fontSize:11, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:500 }}>
-                    {qty}
-                  </span>
-                )}
-              </div>
-
-              {/* Info */}
-              <div style={{ padding:"12px 12px 14px" }}>
-                <div style={{ fontSize:12, fontWeight:400, letterSpacing:.3, lineHeight:1.5, color:C.text, marginBottom:8, minHeight:36 }}>
-                  {sanitize(p.name)}
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div style={{ fontSize:13, color:C.textMid, fontWeight:400 }}>
-                    {p.price > 0 ? fmtMoney(p.price) : <span style={{ fontSize:10, color:C.faint, letterSpacing:.5 }}>洽詢定價</span>}
-                  </div>
-                  <button
-                    onClick={e => { e.stopPropagation(); onAdd({ ...p, price:safePrice(p.price) }); }}
-                    style={{
-                      width:28, height:28, background:inCart(p.id)?C.bgDark:C.bgDeep,
-                      border:`1px solid ${inCart(p.id)?C.bgDark:C.border}`,
-                      color:inCart(p.id)?"#f5f3ef":C.textMid,
-                      fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
-                      transition:"all .15s", flexShrink:0,
-                    }}>
-                    {inCart(p.id) ? <I k="check" size={13}/> : "+"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      <div style={{ padding:"0 12px 14px", position:"relative" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋商品 / 分類"
+          style={{ width:"100%", background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:99, padding:"10px 16px 10px 40px", fontSize:13, color:C.text }}
+          onFocus={e=>{ e.target.style.borderColor=C.accent; }} onBlur={e=>{ e.target.style.borderColor=C.border; }} />
+        <span style={{ position:"absolute", left:26, top:"50%", transform:"translateY(-50%)", fontSize:15, color:C.faint }}>🔍</span>
+        {search && <button onClick={()=>setSearch("")} style={{ position:"absolute", right:24, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:C.faint, fontSize:18, cursor:"pointer" }}>×</button>}
       </div>
-
-      {/* Manual input row */}
-      <div style={{ margin:"1px 0 0", background:C.surface, borderTop:`1px solid ${C.border}`, padding:"16px 20px" }}>
-        <div style={{ fontSize:11, color:C.muted, letterSpacing:.6, marginBottom:12 }}>找不到商品？手動填寫需求</div>
+      {filtered.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"40px 0", color:C.faint, fontSize:13 }}>找不到商品</div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, padding:"0 12px" }}>
+          {filtered.map((p, i) => {
+            const qtyInCart = inCart(p.id)?.qty;
+            return (
+              <div key={p.id} className="appear" style={{ animationDelay:`${i*.025}s`, background:C.surface, borderRadius:14, overflow:"hidden", boxShadow:"0 1px 8px rgba(0,0,0,.06)", cursor:"pointer" }} onClick={() => setSelected(p)}>
+                <div style={{ background:"#f5f0ea", aspectRatio:"1/1", display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
+                  {p.image && p.image.startsWith("data:") ? <img src={p.image} alt={p.name} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                    : p.image ? <span style={{ fontSize:36 }}>{p.image}</span>
+                    : <svg width={36} height={36} viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="1"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9l4-4 4 4 4-4 4 4"/><path d="M3 15l4 4 4-4 4 4 4-4"/></svg>}
+                  {qtyInCart && <span style={{ position:"absolute", top:6, right:6, background:C.accent, color:"#fff", fontSize:10, width:18, height:18, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700 }}>{qtyInCart}</span>}
+                </div>
+                <div style={{ padding:"8px 10px 12px" }}>
+                  <div style={{ fontSize:10, color:C.muted, marginBottom:2 }}>{sanitize(p.category)}</div>
+                  <div style={{ fontSize:11, lineHeight:1.4, color:C.text, marginBottom:5, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" }}>{sanitize(p.name)}</div>
+                  {p.price > 0 ? (
+                    <><div style={{ fontSize:12, fontWeight:700, color:C.text }}>JPY {p.price.toLocaleString()}</div>
+                    <div style={{ fontSize:10, color:C.muted }}>匯率 {rate}</div></>
+                  ) : <div style={{ fontSize:11, color:C.muted }}>洽詢定價</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div style={{ margin:"20px 12px 0", background:C.surface, borderRadius:14, padding:"16px" }}>
+        <div style={{ fontSize:12, color:C.muted, marginBottom:10 }}>找不到商品？手動填寫需求</div>
         {!showManual ? (
-          <Btn v="outline" sm onClick={() => setShowManual(true)}>+ 手動輸入</Btn>
+          <button onClick={() => setShowManual(true)} style={{ background:C.bgDeep, border:`1.5px solid ${C.border}`, borderRadius:99, padding:"8px 20px", fontSize:12, color:C.textMid, cursor:"pointer" }}>+ 手動輸入</button>
         ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <Field label="商品名稱 *" value={mName} onChange={v => setMName(v.slice(0,100))} placeholder="例：資生堂防曬乳 SPF50" />
-            <Field label="原價（JPY）" type="number" value={mPrice} onChange={setMPrice} placeholder="2800" />
-            {mPrice && <div style={{ fontSize:11, color:C.accentLight, letterSpacing:.4 }}>約 {fmtMoney(Math.round(safePrice(mPrice)*rate))}</div>}
-            <Field label="備註（選填）" value={mNote} onChange={v => setMNote(v.slice(0,200))} placeholder="顏色、尺寸、數量…" />
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <Field label="商品名稱 *" value={mName} onChange={v=>setMName(v.slice(0,100))} placeholder="Nike Air Force 1 黑色 25cm" />
+            <Field label="原價（JPY）" type="number" value={mPrice} onChange={setMPrice} placeholder="12000" />
+            {mPrice && <div style={{ fontSize:11, color:C.accent }}>約 NT$ {Math.round(safePrice(mPrice)*rate).toLocaleString()}</div>}
             <div style={{ display:"flex", gap:8 }}>
-              <Btn sm onClick={() => {
-                const n = sanitize(mName,100); if(!n) return;
-                onAdd({ id:secureUid(), name:n, price:Math.round(safePrice(mPrice)*rate), image:"" });
-                setShowManual(false); setMName(""); setMPrice(""); setMNote("");
-              }}>加入購物車</Btn>
-              <Btn sm v="ghost" onClick={() => setShowManual(false)}>取消</Btn>
+              <Btn full onClick={() => { const n=sanitize(mName,100); if(!n) return; onAdd({ id:secureUid(), name:n, price:Math.round(safePrice(mPrice)*rate), image:"", category:"手動輸入" }); setShowManual(false); setMName(""); setMPrice(""); }}>加入購物車</Btn>
+              <Btn v="outline" sm onClick={() => setShowManual(false)}>取消</Btn>
             </div>
           </div>
         )}
       </div>
-
-      {/* Product detail sheet */}
       <Sheet open={!!selected} onClose={() => setSelected(null)} title={selected ? sanitize(selected.name) : ""}>
-        <ProductDetailSheet
-          product={selected}
-          allProducts={active}
-          cart={cart}
-          onAdd={onAdd}
-          onClose={() => setSelected(null)}
-          CARD_BG={CARD_BG}
-        />
+        <ProductDetailSheet product={selected} allProducts={active} cart={cart} onAdd={onAdd} onClose={() => setSelected(null)} rate={rate} />
       </Sheet>
     </div>
   );
 }
 
-// ─── Orders ───────────────────────────────────────────────────────
+
 function OrdersTab({ orders }) {
   const STEPS = ["pending_review","pending","bought","shipped","arrived"];
   return (
@@ -942,23 +945,167 @@ ${notif.items.map(it=>`· ${it.name} × ${it.qty}`).join("\n")}
 }
 
 // ─── Root ─────────────────────────────────────────────────────────
+// ─── Register Page ────────────────────────────────────────────────
+function RegisterPage({ lineUser, onComplete }) {
+  const [form, setForm] = useState({
+    community_name: "",
+    email:          "",
+    line_id:        "",
+    ig_threads:     "",
+    recipient_name: "",
+    phone:          "",
+    seven_store:    "",
+  });
+  const [errors, setErrors]   = useState({});
+  const [saving, setSaving]   = useState(false);
+  const [isEdit, setIsEdit]   = useState(false);
+
+  const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const validate = () => {
+    const e = {};
+    if (!form.community_name.trim()) e.community_name = "請填寫社群名稱";
+    if (!form.email.trim())          e.email = "請填寫信箱";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = "信箱格式不正確";
+    if (!form.recipient_name.trim()) e.recipient_name = "請填寫收件人姓名";
+    if (!form.phone.trim())          e.phone = "請填寫電話";
+    if (!form.ig_threads.trim())     e.ig_threads = "請填寫 IG / Threads 帳號";
+    if (!form.seven_store.trim())    e.seven_store = "請填寫 7-11 門市";
+    return e;
+  };
+
+  const save = async () => {
+    const e = validate();
+    if (Object.keys(e).length) { setErrors(e); return; }
+    setSaving(true);
+    const memberData = {
+      line_user_id:   lineUser.userId,
+      line_name:      lineUser.name,
+      community_name: sanitize(form.community_name, 100),
+      email:          sanitize(form.email, 100),
+      line_id:        sanitize(form.line_id, 100),
+      ig_threads:     sanitize(form.ig_threads, 200),
+      recipient_name: sanitize(form.recipient_name, 50),
+      phone:          sanitize(form.phone, 20),
+      seven_store:    sanitize(form.seven_store, 100),
+      updated_at:     new Date().toISOString(),
+    };
+    try {
+      const { error } = await supabase.from("members")
+        .upsert([memberData], { onConflict: "line_user_id" });
+      if (error) throw error;
+      onComplete(memberData);
+    } catch(err) {
+      console.error(err);
+      alert("儲存失敗，請稍後再試");
+    }
+    setSaving(false);
+  };
+
+  const FIELDS = [
+    { key:"community_name", label:"社群名稱",        required:true,  placeholder:"例：曉曉代購團",    type:"text" },
+    { key:"email",          label:"信箱",             required:true,  placeholder:"example@gmail.com",  type:"email" },
+    { key:"line_id",        label:"LINE ID",          required:false, placeholder:"@yourlineid",        type:"text" },
+    { key:"ig_threads",     label:"IG / Threads 連結", required:true,  placeholder:"https://www.instagram.com/xxx", type:"text" },
+    { key:"recipient_name", label:"收件人姓名",        required:true,  placeholder:"王小明",             type:"text" },
+    { key:"phone",          label:"電話",             required:true,  placeholder:"0912-345-678",        type:"tel" },
+    { key:"seven_store",    label:"7-11 門市",         required:true,  placeholder:"台北市中正區博愛門市", type:"text" },
+  ];
+
+  return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-start", padding:"32px 20px 60px" }}>
+      {/* Header */}
+      <div style={{ width:"100%", maxWidth:420, marginBottom:28, textAlign:"center" }}>
+        <div style={{ fontFamily:"'IM Fell English',serif", fontStyle:"italic", fontSize:10, color:C.muted, letterSpacing:3, textTransform:"uppercase", marginBottom:10 }}>Member Registration</div>
+        <div style={{ fontFamily:"'Noto Serif TC',serif", fontSize:22, fontWeight:300, letterSpacing:2, color:C.text, marginBottom:8 }}>
+          {isEdit ? "編輯基本資料" : "填寫基本資料"}
+        </div>
+        <div style={{ fontSize:12, color:C.muted, lineHeight:2, letterSpacing:.4 }}>
+          請填寫以下資料以完成註冊<br/>
+          之後可在會員中心修改
+        </div>
+        <div style={{ width:28, height:1, background:C.borderMid, margin:"14px auto 0" }} />
+      </div>
+
+      {/* LINE info badge */}
+      <div style={{ width:"100%", maxWidth:420, background:C.surface, border:`1px solid ${C.border}`, padding:"12px 16px", marginBottom:20, display:"flex", alignItems:"center", gap:12 }}>
+        <div style={{ width:36, height:36, background:"#00b900", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>💬</div>
+        <div>
+          <div style={{ fontSize:11, color:C.muted, letterSpacing:.5 }}>LINE 已驗證</div>
+          <div style={{ fontSize:14, fontWeight:500, color:C.text, marginTop:2 }}>{lineUser.name}</div>
+        </div>
+      </div>
+
+      {/* Form */}
+      <div style={{ width:"100%", maxWidth:420, background:C.surface, border:`1px solid ${C.border}`, boxShadow:C.shadow }}>
+        <div style={{ padding:"24px 20px", display:"flex", flexDirection:"column", gap:16 }}>
+          {FIELDS.map(({ key, label, required, placeholder, type }) => (
+            <div key={key} style={{ display:"flex", flexDirection:"column", gap:6 }}>
+              <label style={{ fontSize:10, color:errors[key]?C.red:C.muted, fontWeight:500, letterSpacing:1, textTransform:"uppercase" }}>
+                {label}{required && <span style={{ color:C.red }}> *</span>}
+              </label>
+              <input
+                type={type}
+                value={form[key]}
+                onChange={e => { f(key, e.target.value); setErrors(p=>({...p,[key]:""})); }}
+                placeholder={placeholder}
+                maxLength={200}
+                style={{
+                  background:C.bg, border:`1px solid ${errors[key]?C.red:C.border}`,
+                  padding:"10px 12px", color:C.text, fontSize:14, letterSpacing:.3,
+                  transition:"border .15s, box-shadow .15s",
+                }}
+                onFocus={e=>{ e.target.style.borderColor=errors[key]?C.red:C.accent; e.target.style.boxShadow=`0 0 0 2px ${C.accent}15`; }}
+                onBlur={e=>{ e.target.style.borderColor=errors[key]?C.red:C.border; e.target.style.boxShadow="none"; }}
+              />
+              {errors[key] && <div style={{ fontSize:11, color:C.red, letterSpacing:.3 }}>⚠ {errors[key]}</div>}
+            </div>
+          ))}
+
+          {/* 必填提示 */}
+          <div style={{ fontSize:11, color:C.faint, letterSpacing:.4, paddingTop:4, borderTop:`1px solid ${C.border}` }}>
+            * 為必填欄位。您的資料僅用於訂單配送與聯絡用途。
+          </div>
+
+          <button onClick={save} disabled={saving} style={{
+            background:saving?C.bgDeep:C.bgDark, color:saving?C.muted:"#f5f3ef",
+            border:"none", padding:"13px 20px", fontSize:13, fontWeight:400,
+            letterSpacing:.5, cursor:saving?"not-allowed":"pointer",
+            transition:"opacity .15s", display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+          }}>
+            {saving ? <><span style={{ animation:"spin 1s linear infinite", display:"inline-block" }}>◌</span> 儲存中…</> : "完成註冊，進入系統"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerRoot() {
   injectStyles();
   const [lineUser, setLineUser] = useState(null);
+  const [member, setMember]     = useState(null);   // null = 未載入, false = 未註冊, object = 已註冊
   const [data, setData]         = useState({ rate:0.26, products:[], inStock:[], orders:[], wishlist:[], announcements:[] });
   const [loading, setLoading]   = useState(false);
 
+  // 登入後：1. 檢查是否已有會員資料  2. 載入頁面資料
   useEffect(() => {
     if (!lineUser) return;
     setLoading(true);
+
     Promise.all([
+      // 檢查會員資料
+      supabase.from("members").select("*").eq("line_user_id", lineUser.userId).single(),
+      // 載入頁面資料
       supabase.from("products").select("*").eq("status","on").order("created_at",{ascending:false}),
       supabase.from("in_stock").select("*").eq("status","on").order("created_at",{ascending:false}),
       supabase.from("announcements").select("*").order("created_at",{ascending:false}),
       supabase.from("orders").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false}),
       supabase.from("wishlist").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false}),
       supabase.from("settings").select("*").eq("key","jpy_rate").single(),
-    ]).then(([p,s,a,o,w,r]) => {
+    ]).then(([m, p, s, a, o, w, r]) => {
+      // 設定會員資料（有資料就設定，沒有就 false 表示未註冊）
+      setMember(m.data || false);
       setData({
         products:      p.data||[],
         inStock:       s.data||[],
@@ -970,38 +1117,29 @@ export default function CustomerRoot() {
       setLoading(false);
     }).catch(() => setLoading(false));
 
-    // ── 即時訂閱：所有客人需要的資料變動 ────────────────────────
+    // 即時訂閱
     const sub = supabase
       .channel("customer-realtime")
-      // 訂單狀態更新（業者改狀態，客人即時看到）
-      .on("postgres_changes", {
-        event: "UPDATE", schema: "public", table: "orders",
-        filter: `customer_line_id=eq.${lineUser.userId}`
-      }, payload => {
+      .on("postgres_changes", { event:"UPDATE", schema:"public", table:"orders", filter:`customer_line_id=eq.${lineUser.userId}` }, payload => {
         setData(d => ({ ...d, orders: d.orders.map(o => o.id===payload.new.id ? payload.new : o) }));
       })
-      // 商品新增
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"products" }, payload => {
         if (payload.new.status === "on") setData(d => ({ ...d, products: [payload.new, ...d.products] }));
       })
-      // 商品更新（上下架）
       .on("postgres_changes", { event:"UPDATE", schema:"public", table:"products" }, payload => {
         setData(d => ({
           ...d,
           products: payload.new.status === "on"
-            ? d.products.map(p => p.id===payload.new.id ? payload.new : p).concat(d.products.find(p=>p.id===payload.new.id) ? [] : [payload.new])
+            ? d.products.map(p => p.id===payload.new.id ? payload.new : p)
             : d.products.filter(p => p.id!==payload.new.id),
         }));
       })
-      // 商品刪除
       .on("postgres_changes", { event:"DELETE", schema:"public", table:"products" }, payload => {
         setData(d => ({ ...d, products: d.products.filter(p => p.id!==payload.old.id) }));
       })
-      // 現貨新增
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"in_stock" }, payload => {
         if (payload.new.status === "on") setData(d => ({ ...d, inStock: [payload.new, ...d.inStock] }));
       })
-      // 現貨更新
       .on("postgres_changes", { event:"UPDATE", schema:"public", table:"in_stock" }, payload => {
         setData(d => ({
           ...d,
@@ -1010,27 +1148,19 @@ export default function CustomerRoot() {
             : d.inStock.filter(s => s.id!==payload.new.id),
         }));
       })
-      // 現貨刪除
       .on("postgres_changes", { event:"DELETE", schema:"public", table:"in_stock" }, payload => {
         setData(d => ({ ...d, inStock: d.inStock.filter(s => s.id!==payload.old.id) }));
       })
-      // 公告新增
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"announcements" }, payload => {
         setData(d => ({ ...d, announcements: [payload.new, ...d.announcements] }));
       })
-      // 公告更新
       .on("postgres_changes", { event:"UPDATE", schema:"public", table:"announcements" }, payload => {
         setData(d => ({ ...d, announcements: d.announcements.map(a => a.id===payload.new.id ? payload.new : a) }));
       })
-      // 公告刪除
       .on("postgres_changes", { event:"DELETE", schema:"public", table:"announcements" }, payload => {
         setData(d => ({ ...d, announcements: d.announcements.filter(a => a.id!==payload.old.id) }));
       })
-      // 許願狀態更新（業者標記找到）
-      .on("postgres_changes", {
-        event:"UPDATE", schema:"public", table:"wishlist",
-        filter:`customer_line_id=eq.${lineUser.userId}`
-      }, payload => {
+      .on("postgres_changes", { event:"UPDATE", schema:"public", table:"wishlist", filter:`customer_line_id=eq.${lineUser.userId}` }, payload => {
         setData(d => ({ ...d, wishlist: d.wishlist.map(w => w.id===payload.new.id ? payload.new : w) }));
       })
       .subscribe();
@@ -1039,11 +1169,18 @@ export default function CustomerRoot() {
   }, [lineUser?.userId]);
 
   if (!lineUser) return <LineLogin onSuccess={setLineUser} />;
+
   if (loading) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
       <div style={{ fontSize:28, animation:"spin 1.2s linear infinite", display:"inline-block", color:C.muted }}>◌</div>
       <div style={{ fontSize:13, color:C.muted, letterSpacing:1 }}>載入中</div>
     </div>
   );
-  return <MainApp lineUser={lineUser} data={data} setData={setData} />;
+
+  // 未填寫資料 → 顯示註冊頁
+  if (member === false) return (
+    <RegisterPage lineUser={lineUser} onComplete={m => setMember(m)} />
+  );
+
+  return <MainApp lineUser={lineUser} member={member} setMember={setMember} data={data} setData={setData} />;
 }
