@@ -970,12 +970,68 @@ export default function CustomerRoot() {
       setLoading(false);
     }).catch(() => setLoading(false));
 
-    // 即時訂閱：業者改訂單狀態，客人端即時更新
+    // ── 即時訂閱：所有客人需要的資料變動 ────────────────────────
     const sub = supabase
-      .channel("customer-orders")
-      .on("postgres_changes", { event:"UPDATE", schema:"public", table:"orders",
-        filter:`customer_line_id=eq.${lineUser.userId}` }, payload => {
+      .channel("customer-realtime")
+      // 訂單狀態更新（業者改狀態，客人即時看到）
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "orders",
+        filter: `customer_line_id=eq.${lineUser.userId}`
+      }, payload => {
         setData(d => ({ ...d, orders: d.orders.map(o => o.id===payload.new.id ? payload.new : o) }));
+      })
+      // 商品新增
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"products" }, payload => {
+        if (payload.new.status === "on") setData(d => ({ ...d, products: [payload.new, ...d.products] }));
+      })
+      // 商品更新（上下架）
+      .on("postgres_changes", { event:"UPDATE", schema:"public", table:"products" }, payload => {
+        setData(d => ({
+          ...d,
+          products: payload.new.status === "on"
+            ? d.products.map(p => p.id===payload.new.id ? payload.new : p).concat(d.products.find(p=>p.id===payload.new.id) ? [] : [payload.new])
+            : d.products.filter(p => p.id!==payload.new.id),
+        }));
+      })
+      // 商品刪除
+      .on("postgres_changes", { event:"DELETE", schema:"public", table:"products" }, payload => {
+        setData(d => ({ ...d, products: d.products.filter(p => p.id!==payload.old.id) }));
+      })
+      // 現貨新增
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"in_stock" }, payload => {
+        if (payload.new.status === "on") setData(d => ({ ...d, inStock: [payload.new, ...d.inStock] }));
+      })
+      // 現貨更新
+      .on("postgres_changes", { event:"UPDATE", schema:"public", table:"in_stock" }, payload => {
+        setData(d => ({
+          ...d,
+          inStock: payload.new.status === "on"
+            ? d.inStock.map(s => s.id===payload.new.id ? payload.new : s)
+            : d.inStock.filter(s => s.id!==payload.new.id),
+        }));
+      })
+      // 現貨刪除
+      .on("postgres_changes", { event:"DELETE", schema:"public", table:"in_stock" }, payload => {
+        setData(d => ({ ...d, inStock: d.inStock.filter(s => s.id!==payload.old.id) }));
+      })
+      // 公告新增
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"announcements" }, payload => {
+        setData(d => ({ ...d, announcements: [payload.new, ...d.announcements] }));
+      })
+      // 公告更新
+      .on("postgres_changes", { event:"UPDATE", schema:"public", table:"announcements" }, payload => {
+        setData(d => ({ ...d, announcements: d.announcements.map(a => a.id===payload.new.id ? payload.new : a) }));
+      })
+      // 公告刪除
+      .on("postgres_changes", { event:"DELETE", schema:"public", table:"announcements" }, payload => {
+        setData(d => ({ ...d, announcements: d.announcements.filter(a => a.id!==payload.old.id) }));
+      })
+      // 許願狀態更新（業者標記找到）
+      .on("postgres_changes", {
+        event:"UPDATE", schema:"public", table:"wishlist",
+        filter:`customer_line_id=eq.${lineUser.userId}`
+      }, payload => {
+        setData(d => ({ ...d, wishlist: d.wishlist.map(w => w.id===payload.new.id ? payload.new : w) }));
       })
       .subscribe();
 
