@@ -559,13 +559,12 @@ function ProductDetailSheet({ product, allProducts, cart, onAdd, onClose, rate }
         <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>{sanitize(product.category)}</div>
         <div style={{ fontSize:16, fontWeight:600, lineHeight:1.5, color:C.text }}>{sanitize(product.name)}</div>
       </div>
-      {jpyPrice > 0 && (
+      {twdPrice > 0 && (
         <div style={{ background:C.bgDeep, borderRadius:12, padding:"14px 16px", marginBottom:16 }}>
           <div style={{ fontSize:12, color:C.muted, fontWeight:600, marginBottom:8 }}>訂單資料</div>
           <div style={{ fontSize:13, color:C.textMid, lineHeight:2 }}>
-            <div>JPY {jpyPrice.toLocaleString()}</div>
-            <div>當日實刷匯率 {rate || 0.26}</div>
-            <div style={{ fontWeight:600, color:C.text, fontSize:15, marginTop:4 }}>預估台幣：NT$ {twdPrice.toLocaleString()}</div>
+            <div style={{ fontWeight:600, color:C.text, fontSize:18 }}>NT$ {twdPrice.toLocaleString()}</div>
+            <div style={{ fontSize:11, color:C.muted }}>JPY {jpyPrice.toLocaleString()} × 匯率 {rate || 0.26}</div>
           </div>
         </div>
       )}
@@ -588,14 +587,14 @@ function ProductDetailSheet({ product, allProducts, cart, onAdd, onClose, rate }
           <button onClick={() => setQty(q => Math.max(1,q-1))} style={{ width:40, height:40, borderRadius:"50%", background:C.bgDeep, border:`1.5px solid ${C.border}`, fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:C.textMid }}>−</button>
           <div style={{ fontSize:18, fontWeight:600, minWidth:32, textAlign:"center" }}>{qty}</div>
           <button onClick={() => setQty(q => Math.min(99,q+1))} style={{ width:40, height:40, borderRadius:"50%", background:C.bgDeep, border:`1.5px solid ${C.border}`, fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", color:C.textMid }}>+</button>
-          {jpyPrice > 0 && <div style={{ marginLeft:"auto", fontSize:12, color:C.muted }}>{qty} 件約 <span style={{ color:C.accent, fontWeight:600 }}>NT$ {(twdPrice*qty).toLocaleString()}</span></div>}
+          {twdPrice > 0 && <div style={{ marginLeft:"auto", fontSize:12, color:C.muted }}>{qty} 件約 <span style={{ color:C.accent, fontWeight:600 }}>NT$ {(twdPrice*qty).toLocaleString()}</span></div>}
         </div>
       </div>
       <button disabled={!allSelected} onClick={() => {
         const varLabel = Object.entries(selVariants).map(([g,v])=>`${g}：${v}`).join(" / ");
         const itemName = `${sanitize(product.name)}${varLabel ? ` / ${varLabel}` : ""}`;
         const cartId = product.id + JSON.stringify(selVariants);
-        for (let i = 0; i < qty; i++) onAdd({ ...product, id:cartId, name:itemName, price:safePrice(jpyPrice) });
+        for (let i = 0; i < qty; i++) onAdd({ ...product, id:cartId, name:itemName, price:safePrice(twdPrice) });
         onClose();
       }} style={{ width:"100%", padding:"15px", borderRadius:99, background:allSelected?C.accent:C.bgDeep, color:allSelected?"#fff":C.muted, border:"none", fontSize:15, fontWeight:600, cursor:allSelected?"pointer":"not-allowed", transition:"all .2s" }}>
         {!allSelected ? "請選擇規格" : `加入購物車`}
@@ -697,8 +696,8 @@ function CatalogTab({ products, rate, cart, onAdd }) {
                   <div style={{ fontSize:10, color:C.muted, marginBottom:2 }}>{sanitize(p.category)}</div>
                   <div style={{ fontSize:11, lineHeight:1.4, color:C.text, marginBottom:5, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" }}>{sanitize(p.name)}</div>
                   {p.price > 0 ? (
-                    <><div style={{ fontSize:12, fontWeight:700, color:C.text }}>JPY {p.price.toLocaleString()}</div>
-                    <div style={{ fontSize:10, color:C.muted }}>匯率 {rate}</div></>
+                    <><div style={{ fontSize:13, fontWeight:700, color:C.accent }}>NT$ {Math.round(p.price * rate).toLocaleString()}</div>
+                    <div style={{ fontSize:10, color:C.faint }}>JPY {p.price.toLocaleString()}</div></>
                   ) : <div style={{ fontSize:11, color:C.muted }}>洽詢定價</div>}
                 </div>
               </div>
@@ -713,10 +712,10 @@ function CatalogTab({ products, rate, cart, onAdd }) {
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             <Field label="商品名稱 *" value={mName} onChange={v=>setMName(v.slice(0,100))} placeholder="Nike Air Force 1 黑色 25cm" />
-            <Field label="原價（JPY）" type="number" value={mPrice} onChange={setMPrice} placeholder="12000" />
-            {mPrice && <div style={{ fontSize:11, color:C.accent }}>約 NT$ {Math.round(safePrice(mPrice)*rate).toLocaleString()}</div>}
+            <Field label="定價（NT$）" type="number" value={mPrice} onChange={setMPrice} placeholder="600" />
+            {mPrice && <div style={{ fontSize:11, color:C.accent }}>NT$ {Number(mPrice).toLocaleString()}</div>}
             <div style={{ display:"flex", gap:8 }}>
-              <Btn full onClick={() => { const n=sanitize(mName,100); if(!n) return; onAdd({ id:secureUid(), name:n, price:Math.round(safePrice(mPrice)*rate), image:"", category:"手動輸入" }); setShowManual(false); setMName(""); setMPrice(""); }}>加入購物車</Btn>
+              <Btn full onClick={() => { const n=sanitize(mName,100); if(!n) return; onAdd({ id:secureUid(), name:n, price:safePrice(mPrice), image:"", category:"手動輸入" }); setShowManual(false); setMName(""); setMPrice(""); }}>加入購物車</Btn>
               <Btn v="outline" sm onClick={() => setShowManual(false)}>取消</Btn>
             </div>
           </div>
