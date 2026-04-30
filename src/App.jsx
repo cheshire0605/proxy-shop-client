@@ -730,66 +730,258 @@ function CatalogTab({ products, rate, cart, onAdd }) {
 
 
 function OrdersTab({ orders }) {
-  const STEPS = ["pending_review","pending","bought","shipped","arrived"];
+  const STEPS = [
+    { key:"pending_review", label:"待審核" },
+    { key:"pending",        label:"待採購" },
+    { key:"bought",         label:"已採購" },
+    { key:"shipped",        label:"已寄出" },
+    { key:"arrived",        label:"已到台" },
+  ];
+
   return (
     <div style={{ padding:"28px 20px 20px" }}>
       <SecHead en="My Orders" zh="我的訂單" />
       {!orders.length ? (
         <div style={{ textAlign:"center", padding:"56px 0", color:C.faint, fontSize:12, letterSpacing:1 }}>尚無訂單紀錄</div>
-      ) : orders.map((o,i)=>(
-        <div key={o.id} className="appear" style={{ animationDelay:`${i*.05}s` }}>
-          <div style={{ padding:"20px 0" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
-              <div>
-                <div style={{ fontSize:14, letterSpacing:.4 }}>{o.items[0]?.name}{o.items.length>1?` 外 ${o.items.length-1} 項`:""}</div>
-                <div style={{ fontSize:10, color:C.faint, marginTop:4, letterSpacing:.6 }}>#{o.no} · {o.createdAt}</div>
-              </div>
-              <StatusTag status={o.status} />
-            </div>
-            {o.status!=="cancelled" && (
-              <div style={{ display:"flex", alignItems:"center", margin:"14px 0", gap:0 }}>
-                {STEPS.map((s,si)=>{ const cur=STEPS.indexOf(o.status); const done=si<=cur; return (
-                  <div key={s} style={{ display:"flex", alignItems:"center", flex:si<STEPS.length-1?1:0 }}>
-                    <div style={{ width:7, height:7, borderRadius:"50%", background:done?C.accent:C.border, flexShrink:0 }} />
-                    {si<STEPS.length-1 && <div style={{ flex:1, height:1, background:si<cur?C.accent:C.border }} />}
+      ) : orders.map((o,i)=>{
+        const createdDate = o.created_at
+          ? new Date(o.created_at).toLocaleDateString("zh-TW")
+          : (o.createdAt || "");
+        const curIdx = STEPS.findIndex(s => s.key === o.status);
+        const isCancelled = o.status === "cancelled";
+
+        return (
+          <div key={o.id} className="appear" style={{ animationDelay:`${i*.05}s` }}>
+            <div style={{ padding:"20px 0" }}>
+              {/* Header */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
+                <div>
+                  <div style={{ fontSize:14, letterSpacing:.4, fontWeight:500 }}>
+                    {o.items?.[0]?.name}{(o.items?.length||0)>1?` 外 ${o.items.length-1} 項`:""}
                   </div>
-                ); })}
+                  <div style={{ fontSize:10, color:C.faint, marginTop:4, letterSpacing:.6 }}>#{o.no} · {createdDate}</div>
+                </div>
+                <StatusTag status={o.status} />
               </div>
-            )}
-            <div style={{ fontSize:11, color:C.muted, letterSpacing:.3 }}>{o.items.map(it=>`${it.name} × ${it.qty}`).join("  ·  ")}</div>
-            <div style={{ marginTop:8, fontSize:13, color:C.text, fontWeight:400 }}>{fmtMoney(o.total)}</div>
+
+              {/* Progress bar */}
+              {!isCancelled && (
+                <div style={{ margin:"16px 0 8px" }}>
+                  {/* Dots + line */}
+                  <div style={{ display:"flex", alignItems:"center" }}>
+                    {STEPS.map((s,si) => {
+                      const done = si <= curIdx;
+                      const active = si === curIdx;
+                      return (
+                        <div key={s.key} style={{ display:"flex", alignItems:"center", flex:si<STEPS.length-1?1:0 }}>
+                          <div style={{
+                            width: active ? 10 : 7,
+                            height: active ? 10 : 7,
+                            borderRadius:"50%",
+                            background: done ? C.accent : C.border,
+                            flexShrink:0,
+                            boxShadow: active ? `0 0 0 3px ${C.accent}30` : "none",
+                            transition:"all .3s",
+                          }} />
+                          {si<STEPS.length-1 && (
+                            <div style={{ flex:1, height:2, background:si<curIdx?C.accent:C.border, transition:"background .3s" }} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Step labels */}
+                  <div style={{ display:"flex", marginTop:6 }}>
+                    {STEPS.map((s,si) => (
+                      <div key={s.key} style={{ flex:si<STEPS.length-1?1:0, fontSize:9, color:si===curIdx?C.accent:C.faint, letterSpacing:.3, textAlign:si===0?"left":si===STEPS.length-1?"right":"center" }}>
+                        {s.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Items */}
+              <div style={{ fontSize:11, color:C.muted, letterSpacing:.3, marginTop:8 }}>
+                {(o.items||[]).map(it=>`${it.name} × ${it.qty}`).join("  ·  ")}
+              </div>
+              <div style={{ marginTop:6, fontSize:13, color:C.text, fontWeight:500 }}>{fmtMoney(o.total)}</div>
+            </div>
+            {i<orders.length-1 && <HR />}
           </div>
-          {i<orders.length-1 && <HR />}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 // ─── Member Center ────────────────────────────────────────────────
 function MemberTab({ member, setMember, lineUser, wishes, onAddWish }) {
-  const [editing, setEditing]         = useState(false);
-  const [form, setForm]               = useState({ ...member });
-  const [wishSheet, setWishSheet]     = useState(false);
-  const [wishName, setWishName]       = useState("");
-  const [wishNote, setWishNote]       = useState("");
-  const [saved, setSaved]             = useState(false);
-  const [formErr, setFormErr]         = useState("");
+  const FIELDS = [
+    { key:"community_name", label:"社群名稱"        },
+    { key:"email",          label:"信箱"            },
+    { key:"line_id",        label:"LINE ID"         },
+    { key:"ig_threads",     label:"IG / Threads"    },
+    { key:"recipient_name", label:"收件人姓名"       },
+    { key:"phone",          label:"電話"            },
+    { key:"seven_store",    label:"7-11 門市"        },
+  ];
 
-  const validateAndSave = () => {
+  const [editing, setEditing]     = useState(false);
+  const [form, setForm]           = useState({ ...member });
+  const [wishSheet, setWishSheet] = useState(false);
+  const [wishName, setWishName]   = useState("");
+  const [wishNote, setWishNote]   = useState("");
+  const [saved, setSaved]         = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [formErr, setFormErr]     = useState("");
+
+  const validateAndSave = async () => {
     setFormErr("");
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      setFormErr("Email 格式不正確"); return;
+      setFormErr("信箱格式不正確"); return;
     }
-    if (form.phone && !/^[\d\-+\s()]{7,20}$/.test(form.phone)) {
-      setFormErr("手機格式不正確"); return;
+    setSaving(true);
+    const updated = {
+      line_user_id:   lineUser.userId,
+      line_name:      lineUser.name,
+      community_name: sanitize(form.community_name||"", 100),
+      email:          sanitize(form.email||"", 100),
+      line_id:        sanitize(form.line_id||"", 100),
+      ig_threads:     sanitize(form.ig_threads||"", 200),
+      recipient_name: sanitize(form.recipient_name||"", 50),
+      phone:          sanitize(form.phone||"", 20),
+      seven_store:    sanitize(form.seven_store||"", 100),
+      updated_at:     new Date().toISOString(),
+    };
+    try {
+      const { error } = await supabase.from("members")
+        .upsert([updated], { onConflict: "line_user_id" });
+      if (error) throw error;
+      setMember(updated);
+      setEditing(false); setSaved(true);
+      setTimeout(()=>setSaved(false), 2500);
+    } catch(e) {
+      setFormErr("儲存失敗，請稍後再試");
     }
-    setMember({ ...form, name:sanitize(form.name,50), phone:sanitize(form.phone,20), email:sanitize(form.email,100) });
-    setEditing(false); setSaved(true);
-    setTimeout(()=>setSaved(false), 2500);
+    setSaving(false);
   };
 
   const WISH_LABEL = { searching:"許願中", found:"已找到" };
+  const displayName = member?.community_name || member?.recipient_name || member?.line_name || lineUser.name;
+
+  return (
+    <div style={{ padding:"28px 20px 20px" }}>
+      <SecHead en="Member Centre" zh="會員中心" />
+
+      {/* Profile card */}
+      <div style={{ background:C.surface, border:`1px solid ${C.border}`, padding:"20px 18px", marginBottom:24, display:"flex", alignItems:"center", gap:16, boxShadow:C.shadow }}>
+        <div style={{ width:48, height:48, background:C.bgDeep, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontFamily:"'Noto Serif TC',serif", fontSize:18, color:C.textMid }}>
+          {displayName?.[0] || "?"}
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:"'Noto Serif TC',serif", fontSize:15, fontWeight:400, letterSpacing:.8, color:C.text, marginBottom:3 }}>
+            {displayName}
+          </div>
+          <div style={{ fontSize:10, color:C.faint, letterSpacing:.6 }}>LINE 已驗證 · {lineUser.name}</div>
+        </div>
+        <Btn sm v="outline" onClick={()=>{ setForm({...member}); setFormErr(""); setEditing(true); }}>
+          <I k="edit" size={11}/> 編輯
+        </Btn>
+      </div>
+
+      {/* Info list — 顯示新欄位 */}
+      {!editing && (
+        <div style={{ background:C.surface, border:`1px solid ${C.border}`, marginBottom:24, boxShadow:C.shadow }}>
+          {FIELDS.map(({ key, label }, i, arr) => (
+            <div key={key}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"13px 18px" }}>
+                <span style={{ fontSize:10, color:C.muted, letterSpacing:.8, textTransform:"uppercase", fontWeight:500, minWidth:80, flexShrink:0 }}>{label}</span>
+                <span style={{ fontSize:13, color:member?.[key]?C.text:C.faint, letterSpacing:.3, textAlign:"right", wordBreak:"break-all" }}>
+                  {member?.[key] || "—"}
+                </span>
+              </div>
+              {i < arr.length-1 && <HR />}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {saved && (
+        <div className="appear" style={{ background:C.greenBg, padding:"10px 16px", marginBottom:24, fontSize:11, color:C.green, letterSpacing:.6, display:"flex", alignItems:"center", gap:8 }}>
+          <I k="check" size={12}/> 資料已儲存
+        </div>
+      )}
+
+      {/* Wishlist */}
+      <div style={{ marginTop:4 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ fontFamily:"'Noto Serif TC',serif", fontSize:14, fontWeight:400, letterSpacing:1.5, color:C.text }}>許願清單</div>
+          <Btn sm v="outline" onClick={()=>setWishSheet(true)}>
+            <I k="heart" size={11}/> 新增
+          </Btn>
+        </div>
+        <HR />
+        {!wishes.length ? (
+          <div style={{ textAlign:"center", padding:"28px 0", color:C.faint, fontSize:11, letterSpacing:.8 }}>尚無許願</div>
+        ) : wishes.map((w,i)=>(
+          <div key={w.id}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 0" }}>
+              <div>
+                <div style={{ fontSize:13, letterSpacing:.3, color:C.text }}>{w.name}</div>
+                {w.note && <div style={{ fontSize:11, color:C.faint, marginTop:2, letterSpacing:.3 }}>{w.note}</div>}
+              </div>
+              <span style={{ fontSize:9, letterSpacing:.7, border:`1px solid ${w.status==="found"?C.green:C.border}`, color:w.status==="found"?C.green:C.muted, padding:"2px 8px", whiteSpace:"nowrap" }}>
+                {WISH_LABEL[w.status]||"許願中"}
+              </span>
+            </div>
+            {i<wishes.length-1 && <HR />}
+          </div>
+        ))}
+      </div>
+
+      {/* Edit Sheet — 新欄位 */}
+      <Sheet open={editing} onClose={()=>setEditing(false)} title="編輯會員資料">
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          <Field label="社群名稱 *"       value={form.community_name||""} onChange={v=>setForm(f=>({...f,community_name:v.slice(0,100)}))} placeholder="例：曉曉代購團" />
+          <Field label="信箱 *"           value={form.email||""}          onChange={v=>setForm(f=>({...f,email:v.slice(0,100)}))}          placeholder="example@gmail.com" type="email" />
+          <Field label="LINE ID"          value={form.line_id||""}        onChange={v=>setForm(f=>({...f,line_id:v.slice(0,100)}))}        placeholder="@yourlineid" />
+          <Field label="IG / Threads *"   value={form.ig_threads||""}     onChange={v=>setForm(f=>({...f,ig_threads:v.slice(0,200)}))}     placeholder="https://www.instagram.com/xxx" />
+          <Field label="收件人姓名 *"     value={form.recipient_name||""} onChange={v=>setForm(f=>({...f,recipient_name:v.slice(0,50)}))}  placeholder="王小明" />
+          <Field label="電話 *"           value={form.phone||""}          onChange={v=>setForm(f=>({...f,phone:v.slice(0,20)}))}           placeholder="0912-345-678" type="tel" />
+          <Field label="7-11 門市 *"      value={form.seven_store||""}    onChange={v=>setForm(f=>({...f,seven_store:v.slice(0,100)}))}    placeholder="台北市中正區博愛門市" />
+
+          <div style={{ background:C.bgDeep, padding:"12px 14px" }}>
+            <div style={{ fontSize:10, color:C.muted, letterSpacing:.8, textTransform:"uppercase", marginBottom:4 }}>LINE 帳號（不可修改）</div>
+            <div style={{ fontSize:12, color:C.faint }}>{lineUser.name}</div>
+          </div>
+
+          {formErr && <div style={{ fontSize:11, color:C.red, letterSpacing:.4 }}>⚠ {formErr}</div>}
+
+          <div style={{ display:"flex", gap:8, paddingTop:4 }}>
+            <Btn full onClick={validateAndSave} disabled={saving}>
+              {saving ? "儲存中…" : "儲存"}
+            </Btn>
+            <Btn full v="outline" onClick={()=>setEditing(false)}>取消</Btn>
+          </div>
+        </div>
+      </Sheet>
+
+      {/* Wish Sheet */}
+      <Sheet open={wishSheet} onClose={()=>setWishSheet(false)} title="新增許願">
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          <Field label="想找的商品 *" value={wishName} onChange={setWishName} placeholder="限定版茶杯組" />
+          <Field label="備註（選填）" value={wishNote} onChange={setWishNote} placeholder="京都限定款、色號…" />
+          <div style={{ fontSize:10, color:C.muted, letterSpacing:.5, lineHeight:2 }}>送出後業者會幫你留意，找到後會通知您。</div>
+          <div style={{ display:"flex", gap:8, paddingTop:4 }}>
+            <Btn full onClick={()=>{ onAddWish(wishName,wishNote); setWishSheet(false); setWishName(""); setWishNote(""); }}>送出許願</Btn>
+            <Btn full v="outline" onClick={()=>setWishSheet(false)}>取消</Btn>
+          </div>
+        </div>
+      </Sheet>
+    </div>
+  );
+}
 
   return (
     <div style={{ padding:"28px 20px 20px" }}>
@@ -1126,12 +1318,19 @@ export default function CustomerRoot() {
         if (payload.new.status === "on") setData(d => ({ ...d, products: [payload.new, ...d.products] }));
       })
       .on("postgres_changes", { event:"UPDATE", schema:"public", table:"products" }, payload => {
-        setData(d => ({
-          ...d,
-          products: payload.new.status === "on"
-            ? d.products.map(p => p.id===payload.new.id ? payload.new : p)
-            : d.products.filter(p => p.id!==payload.new.id),
-        }));
+        setData(d => {
+          const exists = d.products.find(p => p.id === payload.new.id);
+          if (payload.new.status === "on") {
+            // 上架：更新或新增
+            return { ...d, products: exists
+              ? d.products.map(p => p.id===payload.new.id ? payload.new : p)
+              : [payload.new, ...d.products]
+            };
+          } else {
+            // 下架：移除
+            return { ...d, products: d.products.filter(p => p.id !== payload.new.id) };
+          }
+        });
       })
       .on("postgres_changes", { event:"DELETE", schema:"public", table:"products" }, payload => {
         setData(d => ({ ...d, products: d.products.filter(p => p.id!==payload.old.id) }));
@@ -1140,12 +1339,17 @@ export default function CustomerRoot() {
         if (payload.new.status === "on") setData(d => ({ ...d, inStock: [payload.new, ...d.inStock] }));
       })
       .on("postgres_changes", { event:"UPDATE", schema:"public", table:"in_stock" }, payload => {
-        setData(d => ({
-          ...d,
-          inStock: payload.new.status === "on"
-            ? d.inStock.map(s => s.id===payload.new.id ? payload.new : s)
-            : d.inStock.filter(s => s.id!==payload.new.id),
-        }));
+        setData(d => {
+          const exists = d.inStock.find(s => s.id === payload.new.id);
+          if (payload.new.status === "on") {
+            return { ...d, inStock: exists
+              ? d.inStock.map(s => s.id===payload.new.id ? payload.new : s)
+              : [payload.new, ...d.inStock]
+            };
+          } else {
+            return { ...d, inStock: d.inStock.filter(s => s.id !== payload.new.id) };
+          }
+        });
       })
       .on("postgres_changes", { event:"DELETE", schema:"public", table:"in_stock" }, payload => {
         setData(d => ({ ...d, inStock: d.inStock.filter(s => s.id!==payload.old.id) }));
