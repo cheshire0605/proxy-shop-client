@@ -559,15 +559,20 @@ function ProductDetailSheet({ product, allProducts, cart, onAdd, onClose, rate }
         <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>{sanitize(product.category)}</div>
         <div style={{ fontSize:16, fontWeight:600, lineHeight:1.5, color:C.text }}>{sanitize(product.name)}</div>
       </div>
-      {twdPrice > 0 && (
+      {product.description ? (
+        <div style={{ background:C.bgDeep, borderRadius:12, padding:"14px 16px", marginBottom:16 }}>
+          <div style={{ fontSize:12, color:C.muted, fontWeight:600, marginBottom:8, letterSpacing:.5 }}>訂單資料</div>
+          <pre style={{ fontSize:13, color:C.textMid, lineHeight:1.9, whiteSpace:"pre-wrap", fontFamily:"'Noto Sans TC',sans-serif" }}>{product.description}</pre>
+        </div>
+      ) : twdPrice > 0 ? (
         <div style={{ background:C.bgDeep, borderRadius:12, padding:"14px 16px", marginBottom:16 }}>
           <div style={{ fontSize:12, color:C.muted, fontWeight:600, marginBottom:8 }}>訂單資料</div>
           <div style={{ fontSize:13, color:C.textMid, lineHeight:2 }}>
             <div style={{ fontWeight:600, color:C.text, fontSize:18 }}>NT$ {twdPrice.toLocaleString()}</div>
-            <div style={{ fontSize:11, color:C.muted }}>JPY {jpyPrice.toLocaleString()} × 匯率 {rate || 0.26}</div>
+            <div style={{ fontSize:11, color:C.muted }}>此為預估金額，以業者報價為準</div>
           </div>
         </div>
-      )}
+      ) : null}
       {variantGroups.map(([groupName, options]) => (
         <div key={groupName} style={{ marginBottom:14 }}>
           <div style={{ fontSize:13, fontWeight:600, color:C.text, marginBottom:8 }}>{groupName}</div>
@@ -697,7 +702,7 @@ function CatalogTab({ products, rate, cart, onAdd }) {
                   <div style={{ fontSize:11, lineHeight:1.4, color:C.text, marginBottom:5, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" }}>{sanitize(p.name)}</div>
                   {p.price > 0 ? (
                     <><div style={{ fontSize:13, fontWeight:700, color:C.accent }}>NT$ {Math.round(p.price * rate).toLocaleString()}</div>
-                    <div style={{ fontSize:10, color:C.faint }}>JPY {p.price.toLocaleString()}</div></>
+                    <div style={{ fontSize:12, color:C.faint }}>預估金額</div></>
                   ) : <div style={{ fontSize:11, color:C.muted }}>洽詢定價</div>}
                 </div>
               </div>
@@ -731,15 +736,15 @@ function CatalogTab({ products, rate, cart, onAdd }) {
 
 function OrdersTab({ orders }) {
   const STEPS = [
-    { key:"pending_review", label:"待審核" },
-    { key:"pending",        label:"待採購" },
-    { key:"bought",         label:"已採購" },
-    { key:"shipped",        label:"已寄出" },
-    { key:"arrived",        label:"已到台" },
+    { key:"pending_review", label:"待審核", icon:"🌸" },
+    { key:"pending",        label:"待採購", icon:"🛒" },
+    { key:"bought",         label:"已採購", icon:"✨" },
+    { key:"shipped",        label:"已寄出", icon:"📦" },
+    { key:"arrived",        label:"已到台", icon:"🎁" },
   ];
 
   return (
-    <div style={{ padding:"28px 20px 20px" }}>
+    <div style={{ padding:"24px 16px 20px" }}>
       <SecHead en="My Orders" zh="我的訂單" />
       {!orders.length ? (
         <div style={{ textAlign:"center", padding:"56px 0", color:C.faint, fontSize:12, letterSpacing:1 }}>尚無訂單紀錄</div>
@@ -751,63 +756,116 @@ function OrdersTab({ orders }) {
         const isCancelled = o.status === "cancelled";
 
         return (
-          <div key={o.id} className="appear" style={{ animationDelay:`${i*.05}s` }}>
-            <div style={{ padding:"20px 0" }}>
+          <div key={o.id} className="appear" style={{ animationDelay:`${i*.05}s`, marginBottom:16 }}>
+            <div style={{ background:C.surface, borderRadius:20, overflow:"hidden", boxShadow:"0 2px 16px rgba(0,0,0,.06)", border:`1.5px solid ${C.border}` }}>
+
               {/* Header */}
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
-                <div>
-                  <div style={{ fontSize:14, letterSpacing:.4, fontWeight:500 }}>
-                    {o.items?.[0]?.name}{(o.items?.length||0)>1?` 外 ${o.items.length-1} 項`:""}
+              <div style={{ padding:"16px 18px 14px", borderBottom:`1px solid ${C.border}` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                  <div style={{ flex:1, minWidth:0, marginRight:12 }}>
+                    <div style={{ fontSize:14, fontWeight:600, color:C.text, lineHeight:1.4, marginBottom:4 }}>
+                      {o.items?.[0]?.name}{(o.items?.length||0)>1?` 外 ${o.items.length-1} 項`:""}
+                    </div>
+                    <div style={{ fontSize:10, color:C.faint, letterSpacing:.5 }}>#{o.no} · {createdDate}</div>
                   </div>
-                  <div style={{ fontSize:10, color:C.faint, marginTop:4, letterSpacing:.6 }}>#{o.no} · {createdDate}</div>
+                  <StatusTag status={o.status} />
                 </div>
-                <StatusTag status={o.status} />
               </div>
 
               {/* Progress bar */}
               {!isCancelled && (
-                <div style={{ margin:"16px 0 8px" }}>
-                  {/* Dots + line */}
-                  <div style={{ display:"flex", alignItems:"center" }}>
-                    {STEPS.map((s,si) => {
-                      const done = si <= curIdx;
+                <div style={{ padding:"20px 18px 16px", background:`linear-gradient(180deg, ${C.bgDeep}80, ${C.surface})` }}>
+                  {/* Step icons + lines */}
+                  <div style={{ display:"flex", alignItems:"center", marginBottom:10 }}>
+                    {STEPS.map((s, si) => {
+                      const done   = si < curIdx;
                       const active = si === curIdx;
+                      const future = si > curIdx;
                       return (
                         <div key={s.key} style={{ display:"flex", alignItems:"center", flex:si<STEPS.length-1?1:0 }}>
+                          {/* Circle */}
                           <div style={{
-                            width: active ? 10 : 7,
-                            height: active ? 10 : 7,
+                            width:  active ? 36 : 28,
+                            height: active ? 36 : 28,
                             borderRadius:"50%",
-                            background: done ? C.accent : C.border,
+                            background: done   ? C.accent :
+                                        active ? C.bgDark  : C.bgDeep,
+                            border: `2px solid ${done||active ? C.accent : C.border}`,
+                            display:"flex", alignItems:"center", justifyContent:"center",
                             flexShrink:0,
-                            boxShadow: active ? `0 0 0 3px ${C.accent}30` : "none",
-                            transition:"all .3s",
-                          }} />
-                          {si<STEPS.length-1 && (
-                            <div style={{ flex:1, height:2, background:si<curIdx?C.accent:C.border, transition:"background .3s" }} />
+                            boxShadow: active ? `0 4px 14px ${C.accent}40` : "none",
+                            transition:"all .4s cubic-bezier(.16,1,.3,1)",
+                            fontSize: active ? 16 : 13,
+                            position:"relative", zIndex:1,
+                          }}>
+                            {done
+                              ? <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                              : <span style={{ opacity: future ? .4 : 1 }}>{s.icon}</span>
+                            }
+                          </div>
+                          {/* Line */}
+                          {si < STEPS.length-1 && (
+                            <div style={{ flex:1, height:3, borderRadius:99, background:C.bgDeep, margin:"0 4px", overflow:"hidden", position:"relative" }}>
+                              <div style={{ position:"absolute", inset:0, background:`linear-gradient(90deg, ${C.accent}, ${C.accentLight})`, borderRadius:99, transform:`scaleX(${si<curIdx?1:0})`, transformOrigin:"left", transition:"transform .6s cubic-bezier(.16,1,.3,1)" }} />
+                            </div>
                           )}
                         </div>
                       );
                     })}
                   </div>
-                  {/* Step labels */}
-                  <div style={{ display:"flex", marginTop:6 }}>
-                    {STEPS.map((s,si) => (
-                      <div key={s.key} style={{ flex:si<STEPS.length-1?1:0, fontSize:9, color:si===curIdx?C.accent:C.faint, letterSpacing:.3, textAlign:si===0?"left":si===STEPS.length-1?"right":"center" }}>
-                        {s.label}
-                      </div>
-                    ))}
+
+                  {/* Labels */}
+                  <div style={{ display:"flex", alignItems:"flex-start" }}>
+                    {STEPS.map((s, si) => {
+                      const active = si === curIdx;
+                      const done   = si < curIdx;
+                      return (
+                        <div key={s.key} style={{
+                          flex: si < STEPS.length-1 ? 1 : 0,
+                          fontSize: active ? 10 : 9,
+                          fontWeight: active ? 700 : 400,
+                          color: active ? C.accent : done ? C.accentLight : C.faint,
+                          letterSpacing: .3,
+                          textAlign: si===0?"left" : si===STEPS.length-1?"right" : "center",
+                          transition:"all .3s",
+                          whiteSpace:"nowrap",
+                        }}>
+                          {s.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Current status message */}
+                  <div style={{ marginTop:14, padding:"10px 14px", background:C.accentBg, borderRadius:10, borderLeft:`3px solid ${C.accent}` }}>
+                    <div style={{ fontSize:12, color:C.accentDark, fontWeight:600 }}>
+                      {STEPS[curIdx]?.icon} {STEPS[curIdx]?.label}
+                      {o.status === "pending_review" && " — 業者確認中，請稍候"}
+                      {o.status === "pending"        && " — 業者將在出發前為您採購"}
+                      {o.status === "bought"         && " — 商品已購入，準備寄送"}
+                      {o.status === "shipped"        && " — 商品已從日本寄出"}
+                      {o.status === "arrived"        && " — 商品已到台灣，準備通知取件 🎉"}
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Items */}
-              <div style={{ fontSize:11, color:C.muted, letterSpacing:.3, marginTop:8 }}>
-                {(o.items||[]).map(it=>`${it.name} × ${it.qty}`).join("  ·  ")}
+              {isCancelled && (
+                <div style={{ padding:"14px 18px", background:"#fff5f5" }}>
+                  <div style={{ fontSize:12, color:C.red }}>❌ 此訂單已取消</div>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div style={{ padding:"12px 18px", borderTop:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ fontSize:11, color:C.muted, letterSpacing:.3 }}>
+                  {(o.items||[]).map(it=>`${it.name} ×${it.qty}`).join(" · ")}
+                </div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.text, flexShrink:0, marginLeft:12 }}>
+                  {fmtMoney(o.total)}
+                </div>
               </div>
-              <div style={{ marginTop:6, fontSize:13, color:C.text, fontWeight:500 }}>{fmtMoney(o.total)}</div>
             </div>
-            {i<orders.length-1 && <HR />}
           </div>
         );
       })}
@@ -1368,7 +1426,25 @@ export default function CustomerRoot() {
       })
       .subscribe();
 
-    return () => sub.unsubscribe();
+    // 定時刷新（每15秒）作為 Realtime 備援
+    const interval = setInterval(async () => {
+      const [p, s, a] = await Promise.all([
+        supabase.from("products").select("*").eq("status","on").order("created_at",{ascending:false}),
+        supabase.from("in_stock").select("*").eq("status","on").order("created_at",{ascending:false}),
+        supabase.from("announcements").select("*").order("created_at",{ascending:false}),
+      ]);
+      setData(d => ({
+        ...d,
+        products:      p.data || d.products,
+        inStock:       s.data || d.inStock,
+        announcements: a.data || d.announcements,
+      }));
+    }, 15000);
+
+    return () => {
+      sub.unsubscribe();
+      clearInterval(interval);
+    };
   }, [lineUser?.userId]);
 
   if (!lineUser) return <LineLogin onSuccess={setLineUser} />;
@@ -1380,10 +1456,6 @@ export default function CustomerRoot() {
     </div>
   );
 
-  // 未填寫資料 → 顯示註冊頁
-  if (member === false) return (
-    <RegisterPage lineUser={lineUser} onComplete={m => setMember(m)} />
-  );
-
-  return <MainApp lineUser={lineUser} member={member} setMember={setMember} data={data} setData={setData} />;
+  // 不管有沒有填資料，直接進入系統
+  return <MainApp lineUser={lineUser} member={member||{}} setMember={setMember} data={data} setData={setData} />;
 }
