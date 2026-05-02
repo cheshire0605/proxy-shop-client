@@ -590,6 +590,31 @@ function MainApp({lineUser,data,setData}) {
   useEffect(()=>{
     injectStyles();
     supabase.from("members").select("*").eq("line_user_id",lineUser.userId).single().then(({data:m})=>{if(m)setMember(m);});
+
+    // 即時監聽訂單狀態變更
+    const channel=supabase
+      .channel("orders-realtime")
+      .on(
+        "postgres_changes",
+        {event:"UPDATE",schema:"public",table:"orders",filter:`customer_line_id=eq.${lineUser.userId}`},
+        (payload)=>{
+          setData(d=>({...d,orders:d.orders.map(o=>o.id===payload.new.id?{...o,...payload.new}:o)}));
+          if(payload.new.status==="cancelled"&&payload.old?.status==="pending_review"){
+            setToast("❌ 您的訂單已被拒絕並取消，如有疑問請聯繫業者");
+            setTab("orders");
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {event:"INSERT",schema:"public",table:"orders",filter:`customer_line_id=eq.${lineUser.userId}`},
+        (payload)=>{
+          setData(d=>({...d,orders:[payload.new,...d.orders.filter(o=>o.id!==payload.new.id)]}));
+        }
+      )
+      .subscribe();
+
+    return()=>{supabase.removeChannel(channel);};
   },[]);
 
   const myOrders=data.orders.filter(o=>o.customer_line_id===lineUser.userId||o.customerId==="me");
