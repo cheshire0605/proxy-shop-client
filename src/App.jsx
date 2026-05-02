@@ -475,59 +475,75 @@ function OrdersTab({orders}) {
           const isCancelled=o.status==="cancelled";
           return (
             <Card key={o.id} className="appear" style={{animationDelay:`${i*.05}s`,padding:0,overflow:"hidden"}}>
-              <div style={{padding:"16px 18px 14px",borderBottom:`1px solid ${C.border}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                  <div style={{flex:1,minWidth:0,marginRight:12}}>
-                    <div style={{fontSize:14,fontWeight:600,color:C.text,lineHeight:1.4,marginBottom:4}}>
-                      {o.items?.[0]?.name}{(o.items?.length||0)>1?` 外 ${o.items.length-1} 項`:""}
-                    </div>
-                    <div style={{fontSize:11,color:C.faint}}>#{o.no} · {createdDate}</div>
-                  </div>
-                  <StatusTag status={o.status}/>
+              {/* 訂單 Header */}
+              <div style={{padding:"14px 18px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:12,color:C.muted,marginBottom:2}}>訂單 #{o.no}</div>
+                  <div style={{fontSize:11,color:C.faint}}>{createdDate} · {(o.items||[]).length} 項商品</div>
                 </div>
+                <div style={{fontSize:14,fontWeight:700,color:C.text}}>{fmtMoney(o.total)}</div>
               </div>
-              {!isCancelled&&curIdx>=0&&(
-                <div style={{padding:"20px 18px 16px",background:`linear-gradient(180deg,${C.bgDeep}60,${C.surface})`}}>
-                  <div style={{display:"flex",alignItems:"center",marginBottom:10}}>
-                    {STEPS.map((s,si)=>{
-                      const done=si<curIdx,active=si===curIdx,future=si>curIdx;
-                      return (
-                        <div key={s.key} style={{display:"flex",alignItems:"center",flex:si<STEPS.length-1?1:0}}>
-                          <div style={{width:active?36:28,height:active?36:28,borderRadius:"50%",background:done?C.accent:active?C.bgDark:C.bgDeep,border:`2px solid ${done||active?C.accent:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:active?`0 4px 14px ${C.accent}40`:"none",transition:"all .4s cubic-bezier(.16,1,.3,1)",fontSize:active?16:13,position:"relative",zIndex:1}}>
-                            {done?<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>:<span style={{opacity:future?.4:1}}>{s.icon}</span>}
-                          </div>
-                          {si<STEPS.length-1&&(
-                            <div style={{flex:1,height:3,borderRadius:99,background:C.bgDeep,margin:"0 4px",overflow:"hidden",position:"relative"}}>
-                              <div style={{position:"absolute",inset:0,background:`linear-gradient(90deg,${C.accent},${C.accentLight})`,borderRadius:99,transform:`scaleX(${si<curIdx?1:0})`,transformOrigin:"left",transition:"transform .6s cubic-bezier(.16,1,.3,1)"}}/>
-                            </div>
-                          )}
+
+              {/* 每個品項獨立顯示 */}
+              {isCancelled
+                ?<div style={{padding:"14px 18px",background:C.redBg}}><div style={{fontSize:12,color:C.red}}>❌ 此訂單已取消</div></div>
+                :(o.items||[]).map((it,ii)=>{
+                  const itemStatus=it.status||o.status||"pending_review";
+                  const itemIdx=STEPS.findIndex(s=>s.key===itemStatus);
+                  const itemCancelled=itemStatus==="cancelled";
+                  return (
+                    <div key={ii} style={{borderBottom:ii<(o.items||[]).length-1?`1px solid ${C.border}`:"none"}}>
+                      {/* 品項 header */}
+                      <div style={{padding:"14px 18px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                        <div style={{flex:1,minWidth:0,marginRight:12}}>
+                          <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:2}}>{it.name}</div>
+                          <div style={{fontSize:11,color:C.muted}}>×{it.qty}{it.price>0?` · ${fmtMoney(it.price*it.qty)}`:""}</div>
                         </div>
-                      );
-                    })}
-                  </div>
-                  <div style={{display:"flex",alignItems:"flex-start"}}>
-                    {STEPS.map((s,si)=>{
-                      const active=si===curIdx,done=si<curIdx;
-                      return <div key={s.key} style={{flex:si<STEPS.length-1?1:0,fontSize:active?10:9,fontWeight:active?700:400,color:active?C.accent:done?C.accentLight:C.faint,textAlign:si===0?"left":si===STEPS.length-1?"right":"center",whiteSpace:"nowrap"}}>{s.label}</div>;
-                    })}
-                  </div>
-                  <div style={{marginTop:14,padding:"10px 14px",background:C.accentBg,borderRadius:10,borderLeft:`3px solid ${C.accent}`}}>
-                    <div style={{fontSize:12,color:C.accent,fontWeight:600}}>
-                      {STEPS[curIdx]?.icon} {STEPS[curIdx]?.label}
-                      {o.status==="pending_review"&&" — 業者確認中，請稍候"}
-                      {o.status==="pending"&&" — 業者將在出發前為您採購"}
-                      {o.status==="bought"&&" — 商品已購入，準備寄送"}
-                      {o.status==="shipped"&&" — 商品已從日本寄出"}
-                      {o.status==="arrived"&&" — 商品已到台灣，準備通知取件 🎉"}
+                        <StatusTag status={itemStatus}/>
+                      </div>
+
+                      {/* 品項進度條（韓系簡約）*/}
+                      {!itemCancelled&&itemIdx>=0&&(
+                        <div style={{padding:"12px 18px 16px"}}>
+                          <div style={{display:"flex",alignItems:"center"}}>
+                            {STEPS.map((s,si)=>{
+                              const done=si<itemIdx,active=si===itemIdx,future=si>itemIdx;
+                              return (
+                                <div key={s.key} style={{display:"flex",alignItems:"center",flex:si<STEPS.length-1?1:0}}>
+                                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+                                    <div style={{
+                                      width: active?20:14, height: active?20:14,
+                                      borderRadius:"50%",
+                                      background: done?"#3d4a3e": active?"#1c1c1a":"transparent",
+                                      border: `1.5px solid ${done?"#3d4a3e":active?"#1c1c1a":"#d0cbc4"}`,
+                                      display:"flex",alignItems:"center",justifyContent:"center",
+                                      flexShrink:0,
+                                      boxShadow: active?"0 2px 8px rgba(28,28,26,0.18)":"none",
+                                      transition:"all .35s cubic-bezier(.16,1,.3,1)",
+                                    }}>
+                                      {done&&<svg width={7} height={7} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                      {active&&<div style={{width:5,height:5,borderRadius:"50%",background:"#fff"}}/>}
+                                    </div>
+                                    <div style={{fontSize:9,fontWeight:active?600:400,color:active?"#3d4a3e":done?"#8a9e8b":"#c0bcb8",letterSpacing:.3,whiteSpace:"nowrap"}}>
+                                      {s.label}
+                                    </div>
+                                  </div>
+                                  {si<STEPS.length-1&&(
+                                    <div style={{flex:1,height:1,margin:"0 4px",marginBottom:14,borderRadius:99,background:"#ede9e3",overflow:"hidden",position:"relative"}}>
+                                      <div style={{position:"absolute",inset:0,background:"#3d4a3e",borderRadius:99,transform:`scaleX(${done?1:0})`,transformOrigin:"left",transition:"transform .5s cubic-bezier(.16,1,.3,1)"}}/>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {itemCancelled&&<div style={{padding:"10px 18px 14px"}}><div style={{fontSize:11,color:C.red}}>❌ 此品項已取消</div></div>}
                     </div>
-                  </div>
-                </div>
-              )}
-              {isCancelled&&<div style={{padding:"14px 18px",background:C.redBg}}><div style={{fontSize:12,color:C.red}}>❌ 此訂單已取消</div></div>}
-              <div style={{padding:"12px 18px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{fontSize:11,color:C.muted}}>{(o.items||[]).map(it=>`${it.name} ×${it.qty}`).join(" · ")}</div>
-                <div style={{fontSize:14,fontWeight:700,color:C.text,flexShrink:0,marginLeft:12}}>{fmtMoney(o.total)}</div>
-              </div>
+                  );
+                })
+              }
             </Card>
           );
         })
@@ -591,12 +607,12 @@ function MainApp({lineUser,data,setData}) {
     injectStyles();
     supabase.from("members").select("*").eq("line_user_id",lineUser.userId).single().then(({data:m})=>{if(m)setMember(m);});
 
-    // 即時監聽訂單狀態變更
+    // ── 全系統即時同步 ──────────────────────────────────────────
     const channel=supabase
-      .channel("orders-realtime")
-      .on(
-        "postgres_changes",
-        {event:"UPDATE",schema:"public",table:"orders",filter:`customer_line_id=eq.${lineUser.userId}`},
+      .channel("realtime-all")
+
+      // ── 訂單 ──
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"orders",filter:`customer_line_id=eq.${lineUser.userId}`},
         (payload)=>{
           setData(d=>({...d,orders:d.orders.map(o=>o.id===payload.new.id?{...o,...payload.new}:o)}));
           if(payload.new.status==="cancelled"&&payload.old?.status==="pending_review"){
@@ -605,13 +621,59 @@ function MainApp({lineUser,data,setData}) {
           }
         }
       )
-      .on(
-        "postgres_changes",
-        {event:"INSERT",schema:"public",table:"orders",filter:`customer_line_id=eq.${lineUser.userId}`},
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"orders",filter:`customer_line_id=eq.${lineUser.userId}`},
         (payload)=>{
           setData(d=>({...d,orders:[payload.new,...d.orders.filter(o=>o.id!==payload.new.id)]}));
         }
       )
+      .on("postgres_changes",{event:"DELETE",schema:"public",table:"orders"},
+        (payload)=>{
+          setData(d=>({...d,orders:d.orders.filter(o=>o.id!==payload.old.id)}));
+          setToast("🗑️ 一筆訂單已被刪除");
+        }
+      )
+
+      // ── 商品（一般代購）──
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"products"},
+        (payload)=>{setData(d=>({...d,products:[...d.products,payload.new]}));}
+      )
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"products"},
+        (payload)=>{setData(d=>({...d,products:d.products.map(p=>p.id===payload.new.id?{...p,...payload.new}:p)}));}
+      )
+      .on("postgres_changes",{event:"DELETE",schema:"public",table:"products"},
+        (payload)=>{setData(d=>({...d,products:d.products.filter(p=>p.id!==payload.old.id)}));}
+      )
+
+      // ── 現貨商品 ──
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"in_stock"},
+        (payload)=>{setData(d=>({...d,inStock:[...d.inStock,payload.new]}));}
+      )
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"in_stock"},
+        (payload)=>{setData(d=>({...d,inStock:d.inStock.map(p=>p.id===payload.new.id?{...p,...payload.new}:p)}));}
+      )
+      .on("postgres_changes",{event:"DELETE",schema:"public",table:"in_stock"},
+        (payload)=>{setData(d=>({...d,inStock:d.inStock.filter(p=>p.id!==payload.old.id)}));}
+      )
+
+      // ── 許願清單 ──
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"wishlist"},
+        (payload)=>{setData(d=>({...d,wishlist:d.wishlist.map(w=>w.id===payload.new.id?{...w,...payload.new}:w)}));}
+      )
+      .on("postgres_changes",{event:"DELETE",schema:"public",table:"wishlist"},
+        (payload)=>{setData(d=>({...d,wishlist:d.wishlist.filter(w=>w.id!==payload.old.id)}));}
+      )
+
+      // ── 公告 ──
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"announcements"},
+        (payload)=>{setData(d=>({...d,announcements:[payload.new,...d.announcements]}));}
+      )
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"announcements"},
+        (payload)=>{setData(d=>({...d,announcements:d.announcements.map(a=>a.id===payload.new.id?{...a,...payload.new}:a)}));}
+      )
+      .on("postgres_changes",{event:"DELETE",schema:"public",table:"announcements"},
+        (payload)=>{setData(d=>({...d,announcements:d.announcements.filter(a=>a.id!==payload.old.id)}));}
+      )
+
       .subscribe();
 
     return()=>{supabase.removeChannel(channel);};
