@@ -338,7 +338,7 @@ function CatalogTab({products,inStock,rate,cart,onAdd,showCart,setShowCart,updat
       <Card style={{padding:"16px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div style={{fontSize:14,fontWeight:600}}>一般商品</div>
-          <div style={{fontSize:11,color:C.muted}}>日常掃街可直接下單。</div>
+          <div style={{fontSize:11,color:C.muted}}>可直接下單。</div>
         </div>
         {filtered.length===0?<div style={{textAlign:"center",padding:"32px 0",color:C.faint,fontSize:13}}>找不到商品</div>:<ProductGrid items={filtered} isInStock={false}/>}
         <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
@@ -399,7 +399,7 @@ function CatalogTab({products,inStock,rate,cart,onAdd,showCart,setShowCart,updat
   );
 }
 
-function WishlistTab({wishes,onAddWish}) {
+function WishlistTab({wishes,onAddWish,onAddToCart,setTab}) {
   const [name,setName]=useState("");
   const [note,setNote]=useState("");
   const [submitting,setSubmitting]=useState(false);
@@ -422,20 +422,43 @@ function WishlistTab({wishes,onAddWish}) {
       <Card>
         {!wishes.length
           ?<div style={{fontSize:13,color:C.muted,textAlign:"center",padding:"16px 0"}}>目前還沒有許願商品。</div>
-          :wishes.map((w,i)=>(
-            <div key={w.id}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"14px 0"}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:14,fontWeight:500,color:C.text}}>{w.name}</div>
-                  {w.note&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{w.note}</div>}
+          :wishes.map((w,i)=>{
+            const isFound=w.status==="found";
+            const hasPrice=isFound&&w.price>0;
+            return (
+              <div key={w.id}>
+                <div style={{padding:"16px 0"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:isFound?10:0}}>
+                    <div style={{flex:1,minWidth:0,marginRight:12}}>
+                      <div style={{fontSize:14,fontWeight:500,color:C.text}}>{w.name}</div>
+                      {w.note&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{w.note}</div>}
+                    </div>
+                    <span style={{fontSize:11,border:`1px solid ${isFound?C.green:C.border}`,color:isFound?C.green:C.muted,padding:"3px 10px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0}}>
+                      {isFound?"已找到":"許願中"}
+                    </span>
+                  </div>
+                  {isFound&&(
+                    <div style={{background:C.greenBg,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.green}30`}}>
+                      {hasPrice&&(
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                          <div style={{fontSize:12,color:C.muted}}>業者報價</div>
+                          <div style={{fontSize:18,fontWeight:700,color:C.green}}>{fmtMoney(w.price)}</div>
+                        </div>
+                      )}
+                      {w.found_note&&<div style={{fontSize:12,color:C.textMid,marginBottom:10,lineHeight:1.6}}>{w.found_note}</div>}
+                      <Btn full variant="accent" sm onClick={()=>{
+                        onAddToCart({id:w.id+"_wish",name:w.name,price:hasPrice?w.price:0,image:"",category:"許願商品"});
+                        setTab("catalog");
+                      }}>
+                        加入購物車下單
+                      </Btn>
+                    </div>
+                  )}
                 </div>
-                <span style={{fontSize:11,border:`1px solid ${w.status==="found"?C.green:C.border}`,color:w.status==="found"?C.green:C.muted,padding:"3px 10px",borderRadius:99,whiteSpace:"nowrap",marginLeft:8}}>
-                  {w.status==="found"?"已找到":"許願中"}
-                </span>
+                {i<wishes.length-1&&<HR/>}
               </div>
-              {i<wishes.length-1&&<HR/>}
-            </div>
-          ))
+            );
+          })
         }
       </Card>
     </div>
@@ -731,7 +754,7 @@ function MainApp({lineUser,data,setData}) {
       <div style={{padding:"16px 16px 0"}}>
         {tab==="profile"&&<ProfileTab member={member} setMember={setMember} lineUser={lineUser} setToast={setToast}/>}
         {tab==="catalog"&&<CatalogTab products={data.products} inStock={data.inStock} rate={data.rate} cart={cart} onAdd={addToCart} showCart={showCart} setShowCart={setShowCart} updateCartQty={updateCartQty} removeFromCart={removeFromCart} submitOrder={submitOrder}/>}
-        {tab==="wishlist"&&<WishlistTab wishes={myWishes} onAddWish={addWish}/>}
+        {tab==="wishlist"&&<WishlistTab wishes={myWishes} onAddWish={addWish} onAddToCart={addToCart} setTab={setTab}/>}
         {tab==="orders"&&<OrdersTab orders={myOrders}/>}
         {tab==="shipments"&&<ShipmentsTab orders={myOrders}/>}
       </div>
