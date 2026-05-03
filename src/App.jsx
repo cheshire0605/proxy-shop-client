@@ -422,14 +422,41 @@ function WishlistTab({wishes,onAddWish,onDeleteWish,onAddToCart,setTab}) {
   const [name,setName]=useState("");
   const [note,setNote]=useState("");
   const [imgUrl,setImgUrl]=useState("");
+  const [imgFile,setImgFile]=useState(null);
+  const [imgPreview,setImgPreview]=useState("");
   const [link,setLink]=useState("");
   const [submitting,setSubmitting]=useState(false);
+  const [uploading,setUploading]=useState(false);
+
+  const handleFileChange=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    if(file.size>5*1024*1024){alert("圖片大小請勿超過 5MB");return;}
+    setImgFile(file);
+    setImgUrl("");
+    const reader=new FileReader();
+    reader.onload=ev=>setImgPreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const uploadImage=async()=>{
+    if(!imgFile)return imgUrl||"";
+    setUploading(true);
+    const ext=imgFile.name.split(".").pop();
+    const path=`${secureUid()}.${ext}`;
+    const{error}=await supabase.storage.from("wishlist-images").upload(path,imgFile,{contentType:imgFile.type});
+    setUploading(false);
+    if(error){alert("圖片上傳失敗，請再試一次");return "";}
+    const{data}=supabase.storage.from("wishlist-images").getPublicUrl(path);
+    return data.publicUrl||"";
+  };
 
   const submit=async()=>{
     if(!name.trim())return;
     setSubmitting(true);
-    await onAddWish(name,note,imgUrl,link);
-    setName("");setNote("");setImgUrl("");setLink("");
+    const uploadedUrl=await uploadImage();
+    await onAddWish(name,note,uploadedUrl||imgUrl,link);
+    setName("");setNote("");setImgUrl("");setImgFile(null);setImgPreview("");setLink("");
     setSubmitting(false);
   };
 
@@ -451,17 +478,53 @@ function WishlistTab({wishes,onAddWish,onDeleteWish,onAddToCart,setTab}) {
           <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="補充描述（可選）" rows={2}
             style={{...inputStyle,resize:"none"}}
             onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-          <input value={imgUrl} onChange={e=>setImgUrl(e.target.value)} placeholder="圖片網址（可選）"
-            style={inputStyle}
-            onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+
+          {/* 上傳圖片 */}
+          <div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:6}}>上傳圖片（可選）</div>
+            <label style={{display:"block",cursor:"pointer"}}>
+              <div style={{border:`1.5px dashed ${imgPreview?C.accent:C.border}`,borderRadius:12,padding:"14px",textAlign:"center",background:C.bgDeep,transition:"border .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=imgPreview?C.accent:C.border}>
+                {imgPreview
+                  ?<img src={imgPreview} alt="預覽" style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:8}}/>
+                  :<>
+                    <div style={{fontSize:24,marginBottom:6}}>📷</div>
+                    <div style={{fontSize:12,color:C.muted}}>點擊上傳圖片</div>
+                    <div style={{fontSize:11,color:C.faint,marginTop:2}}>JPG / PNG，最大 5MB</div>
+                  </>
+                }
+              </div>
+              <input type="file" accept="image/*" onChange={handleFileChange} style={{display:"none"}}/>
+            </label>
+            {imgPreview&&(
+              <button onClick={()=>{setImgFile(null);setImgPreview("");}}
+                style={{fontSize:11,color:C.red,background:"none",border:"none",cursor:"pointer",marginTop:4}}>
+                ✕ 移除圖片
+              </button>
+            )}
+          </div>
+
+          {/* 或貼圖片網址 */}
+          {!imgFile&&(
+            <>
+              <div style={{fontSize:11,color:C.faint,textAlign:"center"}}>— 或貼上圖片網址 —</div>
+              <input value={imgUrl} onChange={e=>setImgUrl(e.target.value)} placeholder="https://..."
+                style={inputStyle}
+                onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+              {imgUrl&&imgUrl.startsWith("http")&&(
+                <img src={imgUrl} alt="預覽" style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:12,border:`1px solid ${C.border}`}}
+                  onError={e=>e.target.style.display="none"}/>
+              )}
+            </>
+          )}
+
           <input value={link} onChange={e=>setLink(e.target.value)} placeholder="商品連結（可選）"
             style={inputStyle}
             onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-          {imgUrl&&imgUrl.startsWith("http")&&(
-            <img src={imgUrl} alt="預覽" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:12,border:`1px solid ${C.border}`}}
-              onError={e=>e.target.style.display="none"}/>
-          )}
-          <Btn full variant="accent" onClick={submit} disabled={submitting||!name.trim()}>{submitting?"送出中...":"發起許願"}</Btn>
+          <Btn full variant="accent" onClick={submit} disabled={submitting||uploading||!name.trim()}>
+            {uploading?"上傳圖片中...":submitting?"送出中...":"發起許願"}
+          </Btn>
         </div>
       </Card>
 
@@ -570,8 +633,17 @@ function OrdersTab({orders}) {
                   return (
                     <div key={ii} style={{borderBottom:ii<(o.items||[]).length-1?`1px solid ${C.border}`:"none"}}>
                       {/* 品項 header */}
-                      <div style={{padding:"14px 18px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                        <div style={{flex:1,minWidth:0,marginRight:12}}>
+                      <div style={{padding:"14px 18px 0",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+                        {/* 品項圖片 */}
+                        <div style={{width:48,height:48,borderRadius:10,background:C.bgDeep,flexShrink:0,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>
+                          {it.image?.startsWith("data:")
+                            ?<img src={it.image} alt={it.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                            :it.image
+                              ?<span>{it.image}</span>
+                              :<span style={{fontSize:18,color:C.faint}}>🛒</span>
+                          }
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:2}}>{it.name}</div>
                           <div style={{fontSize:11,color:C.muted}}>×{it.qty}{it.price>0?` · ${fmtMoney(it.price*it.qty)}`:""}</div>
                         </div>
@@ -769,7 +841,7 @@ function MainApp({lineUser,data,setData}) {
   const submitOrder=async()=>{
     if(!cart.length)return;
     const no=secureOrderNo();
-    const items=cart.map(c=>({name:sanitize(c.name,100),qty:safeQty(c.qty),price:safePrice(c.price),note:sanitize(c.note||"",200)}));
+    const items=cart.map(c=>({name:sanitize(c.name,100),qty:safeQty(c.qty),price:safePrice(c.price),note:sanitize(c.note||"",200),image:c.image||""}));
     const total=items.reduce((s,c)=>s+c.price*c.qty,0);
     const orderData={id:secureUid(),no,customer_line_id:lineUser.userId,customer_name:sanitize(lineUser.name,50)||"匿名",status:"pending_review",items,total,created_at:new Date().toISOString()};
     try{
