@@ -231,7 +231,14 @@ function ProductDetailSheet({product,onAdd,onClose,rate}) {
     });
     return Object.entries(groups);
   })();
-  const twdPrice=product.price>0?Math.round(product.price*(rate||1)):0;
+  const basePrice=product.price>0?Math.round(product.price*(rate||1)):0;
+  // 計算已選款式的加價總和
+  const variantExtra=Object.entries(selVariants).reduce((sum,[g,label])=>{
+    const group=variantGroups.find(([gName])=>gName===g);
+    const opt=group?.[1]?.find(o=>o.label===label);
+    return sum+(opt?.price||0);
+  },0);
+  const twdPrice=basePrice>0?basePrice+Math.round(variantExtra*(rate||1)):0;
   const allSelected=variantGroups.length===0||variantGroups.every(([g])=>selVariants[g]);
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -242,7 +249,15 @@ function ProductDetailSheet({product,onAdd,onClose,rate}) {
         <div style={{fontSize:12,color:C.muted}}>{sanitize(product.category||"")}</div>
         <div style={{fontSize:18,fontWeight:700,color:C.text,marginTop:4}}>{sanitize(product.name)}</div>
       </div>
-      {twdPrice>0&&<div style={{background:C.bgDeep,borderRadius:12,padding:"14px 16px"}}><div style={{fontSize:22,fontWeight:700,color:C.accent}}>{fmtMoney(twdPrice)}</div><div style={{fontSize:11,color:C.muted,marginTop:2}}>此為預估金額，以業者報價為準</div></div>}
+      {basePrice>0&&(
+        <div style={{background:C.bgDeep,borderRadius:12,padding:"14px 16px"}}>
+          <div style={{fontSize:22,fontWeight:700,color:C.accent}}>
+            {fmtMoney(twdPrice)}
+            {variantExtra>0&&<span style={{fontSize:13,color:C.muted,fontWeight:400,marginLeft:8}}>（含加價 +NT${Math.round(variantExtra*(rate||1))}）</span>}
+          </div>
+          <div style={{fontSize:11,color:C.muted,marginTop:2}}>此為預估金額，以業者報價為準</div>
+        </div>
+      )}
       {variantGroups.map(([groupName,options])=>(
         <div key={groupName}>
           <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>{groupName}</div>
@@ -250,7 +265,11 @@ function ProductDetailSheet({product,onAdd,onClose,rate}) {
             <select value={selVariants[groupName]||""} onChange={e=>setSelVariants(p=>({...p,[groupName]:e.target.value}))}
               style={{width:"100%",background:C.surface,border:`1.5px solid ${selVariants[groupName]?C.accent:C.border}`,borderRadius:12,padding:"11px 36px 11px 14px",fontSize:14,color:selVariants[groupName]?C.text:C.muted,appearance:"none",cursor:"pointer"}}>
               <option value="">請選擇{groupName}</option>
-              {options.map(o=><option key={o.id} value={o.label}>{o.label}</option>)}
+              {options.map(o=>(
+                <option key={o.id} value={o.label}>
+                  {o.label}{o.price>0?` (+NT$${o.price})`:""}
+                </option>
+              ))}
             </select>
             <span style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",color:C.muted,pointerEvents:"none"}}>⌄</span>
           </div>
