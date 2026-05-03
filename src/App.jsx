@@ -162,24 +162,45 @@ const Sheet = ({open,onClose,title,children})=>{
 };
 
 // ─── 導覽列（底部 Tab） ────────────────────────────────────────────
+// SVG 圖示元件
+const Icon = ({name,size=22,color})=>{
+  const icons = {
+    catalog: <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.658-.463 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>,
+    wishlist: <><path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></>,
+    orders: <><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z"/></>,
+    shipments: <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>,
+    profile: <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/>,
+  };
+  return(
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} fill="none" viewBox="0 0 24 24" stroke={color||"currentColor"} strokeWidth={1.5}>
+      {icons[name]}
+    </svg>
+  );
+};
+
 function BottomNav({tab,setTab,cartCount}){
   const ITEMS=[
-    {id:"catalog",icon:"🛍",label:"商品"},
-    {id:"wishlist",icon:"✨",label:"許願"},
-    {id:"orders",icon:"📋",label:"訂單"},
-    {id:"shipments",icon:"📦",label:"出貨"},
-    {id:"profile",icon:"👤",label:"我的"},
+    {id:"catalog",label:"商品"},
+    {id:"wishlist",label:"許願"},
+    {id:"orders",label:"訂單"},
+    {id:"shipments",label:"出貨"},
+    {id:"profile",label:"我的"},
   ];
   return(
     <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:C.surface,borderTop:`1px solid ${C.borderLight}`,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0)"}}>
-      {ITEMS.map(it=>(
-        <button key={it.id} onClick={()=>setTab(it.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"10px 0 8px",background:"none",border:"none",cursor:"pointer",gap:3,position:"relative"}}>
-          <span style={{fontSize:20,lineHeight:1}}>{it.icon}</span>
-          {it.id==="catalog"&&cartCount>0&&<span style={{position:"absolute",top:6,left:"56%",background:C.accent,color:"#fff",fontSize:9,width:16,height:16,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{cartCount}</span>}
-          <span style={{fontSize:10,color:tab===it.id?C.accent:C.faint,fontWeight:tab===it.id?600:400,letterSpacing:.3,transition:"color .15s"}}>{it.label}</span>
-          {tab===it.id&&<div style={{position:"absolute",bottom:0,width:24,height:2,background:C.accent,borderRadius:99}}/>}
-        </button>
-      ))}
+      {ITEMS.map(it=>{
+        const active=tab===it.id;
+        return(
+          <button key={it.id} onClick={()=>setTab(it.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"10px 0 8px",background:"none",border:"none",cursor:"pointer",gap:3,position:"relative"}}>
+            <div style={{position:"relative"}}>
+              <Icon name={it.id} size={22} color={active?C.accent:C.faint}/>
+              {it.id==="catalog"&&cartCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:"#fff",fontSize:8,width:14,height:14,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{cartCount}</span>}
+            </div>
+            <span style={{fontSize:10,color:active?C.accent:C.faint,fontWeight:active?600:400,letterSpacing:.3,transition:"color .15s"}}>{it.label}</span>
+            {active&&<div style={{position:"absolute",bottom:0,width:20,height:2,background:C.accent,borderRadius:99}}/>}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -197,16 +218,45 @@ function LineLogin({onSuccess}){
       .catch(()=>{setStatus("error");setErr("LINE 登入失敗，請重新整理");});
   },[]);
   return(
-    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.bgDeep} 0%,${C.bg} 60%)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:20,padding:24}}>
-      <div style={{width:72,height:72,borderRadius:24,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,boxShadow:C.shadowMd}}>🌸</div>
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:32,padding:32}}>
+      {/* Logo 區 */}
       <div style={{textAlign:"center"}}>
-        <div style={{fontSize:22,fontWeight:600,color:C.text,letterSpacing:1}}>{APP_NAME}</div>
-        <div style={{fontSize:13,color:C.muted,marginTop:6}}>Loading...</div>
+        <div style={{fontSize:11,letterSpacing:4,color:C.faint,textTransform:"uppercase",marginBottom:14}}>Welcome</div>
+        <div style={{fontSize:30,fontWeight:300,color:C.text,letterSpacing:4}}>{APP_NAME}</div>
+        <div style={{width:32,height:1,background:C.accent,margin:"16px auto 0"}}/>
       </div>
+
       {status==="error"
-        ?<><div style={{fontSize:13,color:C.red,textAlign:"center"}}>{err}</div><Btn onClick={()=>window.location.reload()}>重新整理</Btn></>
-        :<div style={{fontSize:22,animation:"spin 1.2s linear infinite",color:C.faint}}>○</div>
+        ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+          <div style={{fontSize:13,color:C.red,textAlign:"center",padding:"12px 20px",background:C.redBg,borderRadius:C.rSm}}>{err}</div>
+          <button onClick={()=>window.location.reload()}
+            style={{background:C.accent,color:"#fff",border:"none",borderRadius:99,padding:"12px 32px",fontSize:13,fontWeight:500,cursor:"pointer",letterSpacing:.5}}>
+            重新整理
+          </button>
+         </div>
+        :<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:20,width:"100%",maxWidth:280}}>
+          {/* LINE 登入按鈕 */}
+          <button onClick={()=>{
+            const liffId=import.meta.env.VITE_LIFF_ID;
+            if(!liffId)return;
+            if(typeof liff!=="undefined"&&!liff.isLoggedIn()){liff.login();}
+          }}
+            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:12,background:"#06C755",color:"#fff",border:"none",borderRadius:14,padding:"14px 24px",fontSize:15,fontWeight:600,cursor:"pointer",letterSpacing:.5,boxShadow:"0 4px 16px rgba(6,199,85,.25)"}}>
+            <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.070 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+            </svg>
+            使用 LINE 登入
+          </button>
+
+          {/* 載入中提示 */}
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:16,height:16,borderRadius:"50%",border:`1.5px solid ${C.faint}`,borderTopColor:C.accent,animation:"spin 1s linear infinite"}}/>
+            <div style={{fontSize:12,color:C.faint,letterSpacing:.5}}>自動登入中</div>
+          </div>
+         </div>
       }
+
+      <div style={{position:"absolute",bottom:32,fontSize:11,color:C.faint,letterSpacing:.5}}>Powered by Luna Studio</div>
     </div>
   );
 }
@@ -949,9 +999,9 @@ function MainApp({lineUser,data,setData}){
         <div style={{fontSize:18,fontWeight:600,color:C.text,letterSpacing:.3}}>{PAGE_TITLE[tab]||""}</div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           {tab==="catalog"&&(
-            <button onClick={()=>setShowCart(true)} style={{position:"relative",background:"none",border:"none",fontSize:22,cursor:"pointer"}}>
-              🛒
-              {cart.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:C.accent,color:"#fff",fontSize:9,width:16,height:16,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{cart.reduce((s,c)=>s+c.qty,0)}</span>}
+            <button onClick={()=>setShowCart(true)} style={{position:"relative",background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",width:36,height:36}}>
+              <Icon name="catalog" size={22} color={C.textMid}/>
+              {cart.length>0&&<span style={{position:"absolute",top:0,right:0,background:C.accent,color:"#fff",fontSize:8,width:14,height:14,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{cart.reduce((s,c)=>s+c.qty,0)}</span>}
             </button>
           )}
           <button onClick={()=>{if(typeof liff!=="undefined")liff.logout();window.location.reload();}} style={{background:"none",border:"none",fontSize:12,color:C.faint,cursor:"pointer"}}>登出</button>
@@ -995,9 +1045,9 @@ export default function App(){
 
   if(!lineUser)return<LineLogin onSuccess={handleLogin}/>;
   if(loading||!data)return(
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-      <div style={{width:64,height:64,borderRadius:20,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:32}}>🌸</div>
-      <div style={{fontSize:14,color:C.muted,animation:"shimmer 1s ease infinite"}}>載入中...</div>
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12}}>
+      <div style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${C.faint}`,borderTopColor:C.accent,animation:"spin 1s linear infinite"}}/>
+      <div style={{fontSize:12,color:C.faint,letterSpacing:.5}}>載入中</div>
     </div>
   );
   return<MainApp lineUser={lineUser} data={data} setData={setData}/>;
