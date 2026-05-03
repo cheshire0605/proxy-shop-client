@@ -418,26 +418,53 @@ function CatalogTab({products,inStock,rate,cart,onAdd,showCart,setShowCart,updat
   );
 }
 
-function WishlistTab({wishes,onAddWish,onAddToCart,setTab}) {
+function WishlistTab({wishes,onAddWish,onDeleteWish,onAddToCart,setTab}) {
   const [name,setName]=useState("");
   const [note,setNote]=useState("");
+  const [imgUrl,setImgUrl]=useState("");
+  const [link,setLink]=useState("");
   const [submitting,setSubmitting]=useState(false);
-  const submit=async()=>{if(!name.trim())return;setSubmitting(true);await onAddWish(name,note);setName("");setNote("");setSubmitting(false);};
+
+  const submit=async()=>{
+    if(!name.trim())return;
+    setSubmitting(true);
+    await onAddWish(name,note,imgUrl,link);
+    setName("");setNote("");setImgUrl("");setLink("");
+    setSubmitting(false);
+  };
+
+  const inputStyle={width:"100%",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.text,fontFamily:"'Noto Sans TC',sans-serif"};
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <Card>
-        <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>新增許願</div>
-        <div style={{fontSize:13,color:C.muted,marginBottom:16,lineHeight:1.6}}>你可以直接丟商品名、補一點描述，匿名發起集氣。</div>
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="想看的商品 / 連線主題"
-            style={{width:"100%",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.text}}
+        <div style={{fontSize:16,fontWeight:600,marginBottom:6}}>許願 / 集氣牆</div>
+        <div style={{fontSize:13,color:C.muted,marginBottom:16,lineHeight:1.7}}>
+          想連線或想找的品項都可以先許願，Luna 報價後有需要可以直接下單 🌸
+        </div>
+        <div style={{fontSize:12,color:C.textMid,fontWeight:500,marginBottom:10}}>新增許願</div>
+        <div style={{fontSize:12,color:C.muted,marginBottom:12,lineHeight:1.6}}>可以直接丟商品名稱、圖片、連結</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="想看的商品名稱 *"
+            style={inputStyle}
             onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
-          <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="補充描述（可選）" rows={3}
-            style={{width:"100%",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.text,resize:"none",fontFamily:"'Noto Sans TC',sans-serif"}}
+          <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="補充描述（可選）" rows={2}
+            style={{...inputStyle,resize:"none"}}
             onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+          <input value={imgUrl} onChange={e=>setImgUrl(e.target.value)} placeholder="圖片網址（可選）"
+            style={inputStyle}
+            onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+          <input value={link} onChange={e=>setLink(e.target.value)} placeholder="商品連結（可選）"
+            style={inputStyle}
+            onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}/>
+          {imgUrl&&imgUrl.startsWith("http")&&(
+            <img src={imgUrl} alt="預覽" style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:12,border:`1px solid ${C.border}`}}
+              onError={e=>e.target.style.display="none"}/>
+          )}
           <Btn full variant="accent" onClick={submit} disabled={submitting||!name.trim()}>{submitting?"送出中...":"發起許願"}</Btn>
         </div>
       </Card>
+
       <Card>
         {!wishes.length
           ?<div style={{fontSize:13,color:C.muted,textAlign:"center",padding:"16px 0"}}>目前還沒有許願商品。</div>
@@ -447,20 +474,23 @@ function WishlistTab({wishes,onAddWish,onAddToCart,setTab}) {
             return (
               <div key={w.id}>
                 <div style={{padding:"16px 0"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:isFound?10:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                     <div style={{flex:1,minWidth:0,marginRight:12}}>
                       <div style={{fontSize:14,fontWeight:500,color:C.text}}>{w.name}</div>
                       {w.note&&<div style={{fontSize:12,color:C.muted,marginTop:2}}>{w.note}</div>}
+                      {w.link&&<a href={w.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:C.accent,marginTop:4,display:"block",wordBreak:"break-all"}}>🔗 {w.link}</a>}
+                      {w.img_url&&<img src={w.img_url} alt="參考圖" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:10,marginTop:8,border:`1px solid ${C.border}`}} onError={e=>e.target.style.display="none"}/>}
                     </div>
                     <span style={{fontSize:11,border:`1px solid ${isFound?C.green:C.border}`,color:isFound?C.green:C.muted,padding:"3px 10px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0}}>
                       {isFound?"已找到":"許願中"}
                     </span>
                   </div>
+
                   {isFound&&(
-                    <div style={{background:C.greenBg,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.green}30`}}>
+                    <div style={{background:C.greenBg,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.green}30`,marginBottom:10}}>
                       {hasPrice&&(
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                          <div style={{fontSize:12,color:C.muted}}>業者報價</div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                          <div style={{fontSize:12,color:C.muted}}>Luna 報價</div>
                           <div style={{fontSize:18,fontWeight:700,color:C.green}}>{fmtMoney(w.price)}</div>
                         </div>
                       )}
@@ -468,11 +498,15 @@ function WishlistTab({wishes,onAddWish,onAddToCart,setTab}) {
                       <Btn full variant="accent" sm onClick={()=>{
                         onAddToCart({id:w.id+"_wish",name:w.name,price:hasPrice?w.price:0,image:"",category:"許願商品"});
                         setTab("catalog");
-                      }}>
-                        加入購物車下單
-                      </Btn>
+                      }}>加入購物車下單</Btn>
                     </div>
                   )}
+
+                  {/* 刪除許願按鈕 */}
+                  <button onClick={()=>{if(window.confirm("確定要刪除這個許願嗎？"))onDeleteWish(w.id);}}
+                    style={{fontSize:11,color:C.faint,background:"none",border:`1px solid ${C.border}`,borderRadius:99,padding:"4px 12px",cursor:"pointer",marginTop:4}}>
+                    刪除許願
+                  </button>
                 </div>
                 {i<wishes.length-1&&<HR/>}
               </div>
@@ -746,15 +780,24 @@ function MainApp({lineUser,data,setData}) {
     }catch(e){console.error(e);alert("下單失敗，請稍後再試");}
   };
 
-  const addWish=async(name,note)=>{
+  const addWish=async(name,note,imgUrl,link)=>{
     const n=sanitize(name,100);if(!n)return;
-    const wishData={id:secureUid(),customer_line_id:lineUser.userId,customer_name:sanitize(lineUser.name,50)||"匿名",name:n,note:sanitize(note,200),status:"searching",created_at:new Date().toISOString()};
+    const wishData={id:secureUid(),customer_line_id:lineUser.userId,customer_name:sanitize(lineUser.name,50)||"匿名",name:n,note:sanitize(note,200),img_url:sanitize(imgUrl,500),link:sanitize(link,500),status:"searching",created_at:new Date().toISOString()};
     try{
       const{data:saved,error}=await supabase.from("wishlist").insert([wishData]).select().single();
       if(error)throw error;
       setData(d=>({...d,wishlist:[saved,...d.wishlist]}));
     }catch{setData(d=>({...d,wishlist:[wishData,...d.wishlist]}));}
-    setToast("許願已送出");
+    setToast("許願已送出 🌸");
+  };
+
+  const deleteWish=async(id)=>{
+    try{
+      const{error}=await supabase.from("wishlist").delete().eq("id",id);
+      if(error)throw error;
+      setData(d=>({...d,wishlist:d.wishlist.filter(w=>w.id!==id)}));
+      setToast("已刪除許願");
+    }catch{setToast("刪除失敗");}
   };
 
   const HEADER_INFO={
@@ -773,7 +816,7 @@ function MainApp({lineUser,data,setData}) {
       <div style={{padding:"16px 16px 0"}}>
         {tab==="profile"&&<ProfileTab member={member} setMember={setMember} lineUser={lineUser} setToast={setToast}/>}
         {tab==="catalog"&&<CatalogTab products={data.products} inStock={data.inStock} rate={data.rate} cart={cart} onAdd={addToCart} showCart={showCart} setShowCart={setShowCart} updateCartQty={updateCartQty} removeFromCart={removeFromCart} submitOrder={submitOrder}/>}
-        {tab==="wishlist"&&<WishlistTab wishes={myWishes} onAddWish={addWish} onAddToCart={addToCart} setTab={setTab}/>}
+        {tab==="wishlist"&&<WishlistTab wishes={myWishes} onAddWish={addWish} onDeleteWish={deleteWish} onAddToCart={addToCart} setTab={setTab}/>}
         {tab==="orders"&&<OrdersTab orders={myOrders}/>}
         {tab==="shipments"&&<ShipmentsTab orders={myOrders}/>}
       </div>
