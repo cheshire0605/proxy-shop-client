@@ -183,31 +183,45 @@ function ProfileTab({member,setMember,lineUser,setToast}) {
   },[member]);
 
   const save = async()=>{
-    setErr("");setSaving(true);
+    setErr("");
+    if(!form.community_name.trim()){setErr("請填寫社群名稱");return;}
+    if(!form.ig_threads.trim()){setErr("請填寫私人 IG / FB 連結");return;}
+    if(!form.recipient_name.trim()){setErr("請填寫收件人姓名");return;}
+    if(!form.phone.trim()){setErr("請填寫電話");return;}
+    setSaving(true);
     const updated={line_user_id:lineUser.userId,line_name:lineUser.name,community_name:sanitize(form.community_name,100),line_id:sanitize(form.line_id,100),ig_threads:sanitize(form.ig_threads,200),recipient_name:sanitize(form.recipient_name,50),phone:sanitize(form.phone,20),seven_store:sanitize(form.seven_store,100),updated_at:new Date().toISOString()};
     try{
       const{error}=await supabase.from("members").upsert([updated],{onConflict:"line_user_id"});
       if(error)throw error;
-      setMember(updated);setToast("資料已儲存");
+      setMember(updated);setToast("資料已儲存 ✅");
     }catch{setErr("儲存失敗，請稍後再試");}
     setSaving(false);
   };
 
   const FIELDS=[
-    {key:"community_name",label:"社群名稱",placeholder:"OpenChat 顯示名稱"},
+    {key:"community_name",label:"社群名稱 *",placeholder:"OpenChat 顯示名稱",required:true},
     {key:"line_id",label:"LINE ID",placeholder:"你的 LINE ID"},
-    {key:"ig_threads",label:"私人 IG / FB 連結",placeholder:"https://www.instagram.com/..."},
-    {key:"recipient_name",label:"收件人姓名",placeholder:"取件時的姓名"},
-    {key:"phone",label:"電話",placeholder:"09xxxxxxxx"},
+    {key:"ig_threads",label:"私人 IG / FB 連結 *",placeholder:"https://www.instagram.com/...",required:true},
+    {key:"recipient_name",label:"收件人姓名 *",placeholder:"取件時的姓名",required:true},
+    {key:"phone",label:"電話 *",placeholder:"09xxxxxxxx",required:true},
     {key:"seven_store",label:"7-11 門市",placeholder:"常用門市名稱"},
   ];
 
   return (
     <Card>
       <div style={{fontSize:16,fontWeight:600,marginBottom:4}}>基本資料</div>
-      <div style={{fontSize:13,color:C.muted,marginBottom:20,lineHeight:1.6}}>LINE ID 為必填。其他資訊可以之後再補。</div>
+      <div style={{fontSize:13,color:C.muted,marginBottom:20,lineHeight:1.7}}>
+        社群名稱務必填寫正確，改名也請到系統更改 😊<br/>
+        <span style={{fontSize:12,color:C.red}}>* 為必填欄位</span>
+      </div>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {FIELDS.map(f=><Field key={f.key} label={f.label} placeholder={f.placeholder} value={form[f.key]} onChange={v=>setForm(p=>({...p,[f.key]:v}))}/>)}
+        {FIELDS.map(f=>(
+          <div key={f.key}>
+            <Field label={f.label} placeholder={f.placeholder} value={form[f.key]} onChange={v=>setForm(p=>({...p,[f.key]:v}))}
+              style={f.required&&!form[f.key].trim()?{borderColor:C.red}:undefined}/>
+            {f.required&&!form[f.key].trim()&&<div style={{fontSize:11,color:C.red,marginTop:3}}>必填</div>}
+          </div>
+        ))}
       </div>
       {err&&<div style={{fontSize:12,color:C.red,marginTop:12}}>{err}</div>}
       <Btn full variant="accent" onClick={save} disabled={saving} style={{marginTop:20}}>{saving?"儲存中...":"儲存資料"}</Btn>
