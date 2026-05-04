@@ -356,7 +356,7 @@ function ProductDetailSheet({product,onAdd,onClose,rate}){
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
       <div style={{background:C.bgDeep,aspectRatio:"4/3",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:18,overflow:"hidden",margin:"0 -22px"}}>
-        {product.image?.startsWith("data:")?<img src={product.image} alt={product.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:72}}>{product.image||"🛒"}</span>}
+        {product.image?.startsWith("data:")||product.image?.startsWith("http")?<img src={product.image} alt={product.name} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:72}}>{product.image||"🛒"}</span>}
       </div>
       <div>
         <div style={{fontSize:11,color:C.muted,letterSpacing:.5,marginBottom:4}}>{sanitize(product.category||"")}</div>
@@ -426,7 +426,7 @@ function CatalogTab({products,inStock,rate,cart,onAdd,showCart,setShowCart,updat
     return(
       <div className="fadeUp" style={{animationDelay:`${idx*.03}s`,background:C.bgCard,borderRadius:16,overflow:"hidden",cursor:"pointer",border:`1px solid ${C.borderLight}`,boxShadow:C.shadow}} onClick={()=>isInStock?setSelectedInStock(p):setSelected(p)}>
         <div style={{background:C.bgDeep,aspectRatio:"1/1",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
-          {p.image?.startsWith("data:")?<img src={p.image} alt={p.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:36}}>{p.image||"🛒"}</span>}
+          {p.image?.startsWith("data:")||p.image?.startsWith("http")?<img src={p.image} alt={p.name} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:36}}>{p.image||"🛒"}</span>}
           {isInStock&&<span style={{position:"absolute",top:8,left:8,background:C.green,color:"#fff",fontSize:9,padding:"2px 7px",borderRadius:99,fontWeight:600,letterSpacing:.3}}>現貨</span>}
           {qtyInCart&&<span style={{position:"absolute",top:8,right:8,background:C.accent,color:"#fff",fontSize:10,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{qtyInCart}</span>}
         </div>
