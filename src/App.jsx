@@ -513,7 +513,11 @@ function CatalogTab({products,inStock,rate,cart,onAdd,showCart,setShowCart,updat
               {cart.map((item,i)=>(
                 <div key={item.id}>
                   <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 0"}}>
-                    <div style={{width:48,height:48,background:C.bgDeep,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{item.image&&!item.image.startsWith("data:")?item.image:"🛒"}</div>
+                    <div style={{width:48,height:48,background:C.bgDeep,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,overflow:"hidden"}}>
+                      {item.image?.startsWith("data:")||item.image?.startsWith("http")
+                        ?<img src={item.image} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>
+                        :item.image||"🛒"}
+                    </div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:500,color:C.text}}>{item.name}</div>
                       <div style={{fontSize:12,color:C.accent,marginTop:2}}>{item.price>0?fmtMoney(item.price):"洽詢"} × {item.qty}</div>
