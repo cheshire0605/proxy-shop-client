@@ -657,7 +657,7 @@ function WishlistTab({wishes,onAddWish,onDeleteWish,onAddToCart,setTab}){
                   <div style={{background:C.greenBg,borderRadius:C.rSm,padding:"12px 14px",border:`1px solid ${C.green}20`,marginBottom:10}}>
                     {hasPrice&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:12,color:C.muted}}>Luna 報價</div><div style={{fontSize:17,fontWeight:700,color:C.green}}>{fmtMoney(w.price)}</div></div>}
                     {w.found_note&&<div style={{fontSize:12,color:C.textMid,marginBottom:10,lineHeight:1.6}}>{w.found_note}</div>}
-                    <Btn full sm onClick={()=>{onAddToCart({id:w.id+"_wish",name:w.name,price:hasPrice?w.price:0,image:"",category:"許願商品"});setTab("catalog");}}>加入購物車下單</Btn>
+                    <Btn full sm onClick={()=>{onAddToCart({id:w.id+"_wish",name:w.name,price:hasPrice?w.price:0,image:w.img_url||"",category:"許願商品"});setTab("catalog");}}>加入購物車下單</Btn>
                   </div>
                 )}
                 <button onClick={()=>{if(window.confirm("確定要刪除這個許願嗎？"))onDeleteWish(w.id);}}
