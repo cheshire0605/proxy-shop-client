@@ -760,7 +760,7 @@ function OrdersTab({orders}){
                       {(o.items||[]).map((it,idx)=>(
                         <div key={idx} style={{display:"flex",alignItems:"center",gap:10}}>
                           <div style={{width:36,height:36,borderRadius:8,background:C.bgDeep,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,overflow:"hidden"}}>
-                            {it.image?.startsWith("data:")?<img src={it.image} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:it.image||"🛒"}
+                            {it.image?.startsWith("data:")||it.image?.startsWith("http")?<img src={it.image} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:it.image||"🛒"}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:13,color:C.text}}>{it.name}</div>
@@ -786,7 +786,7 @@ function OrdersTab({orders}){
                         {/* 品項 header */}
                         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                           <div style={{width:36,height:36,borderRadius:8,background:C.bgDeep,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,overflow:"hidden"}}>
-                            {it.image?.startsWith("data:")?<img src={it.image} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:it.image||"🛒"}
+                            {it.image?.startsWith("data:")||it.image?.startsWith("http")?<img src={it.image} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:it.image||"🛒"}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{fontSize:13,fontWeight:500,color:C.text}}>{it.name}</div>
