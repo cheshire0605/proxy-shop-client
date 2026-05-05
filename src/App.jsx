@@ -60,6 +60,19 @@ const safePrice = n => { const v=Number(n); return Number.isFinite(v)&&v>=0?Math
 const secureOrderNo = () => { const a=new Uint32Array(1); crypto.getRandomValues(a); return String(100000+(a[0]%900000)); };
 const fmtMoney = n => `NT$ ${Number(n||0).toLocaleString()}`;
 
+// 解析品項名稱：拆出商品名稱和規格/款式
+const parseItemName = (name) => {
+  if (!name) return { mainName: "", variants: [] };
+  const parts = name.split(" / ");
+  const mainName = parts[0] || "";
+  const variants = parts.slice(1).map(p => {
+    const idx = p.indexOf("：");
+    if (idx > -1) return { label: p.slice(0, idx), value: p.slice(idx + 1) };
+    return { label: "", value: p };
+  });
+  return { mainName, variants };
+};
+
 const INIT_DATA = {
   rate:1,
   products:[
@@ -519,8 +532,15 @@ function CatalogTab({products,inStock,rate,cart,onAdd,showCart,setShowCart,updat
                         :item.image||"🛒"}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:13,fontWeight:500,color:C.text}}>{item.name}</div>
-                      <div style={{fontSize:12,color:C.accent,marginTop:2}}>{item.price>0?fmtMoney(item.price):"洽詢"} × {item.qty}</div>
+                      {(()=>{const {mainName,variants}=parseItemName(item.name);return(<>
+                        <div style={{fontSize:13,fontWeight:500,color:C.text}}>{mainName}</div>
+                        {variants.map((v,vi)=>(
+                          <div key={vi} style={{fontSize:11,color:C.muted,marginTop:1}}>
+                            {v.label&&<span style={{color:C.faint,marginRight:3}}>{v.label}</span>}{v.value}
+                          </div>
+                        ))}
+                        <div style={{fontSize:12,color:C.accent,marginTop:2}}>{item.price>0?fmtMoney(item.price):"洽詢"} × {item.qty}</div>
+                      </>)})()}
                     </div>
                     <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
                       <button onClick={()=>updateCartQty(item.id,-1)} style={{width:28,height:28,border:`1px solid ${C.border}`,borderRadius:"8px 0 0 8px",background:C.bgDeep,color:C.textMid,fontSize:16,cursor:"pointer"}}>−</button>
@@ -725,7 +745,7 @@ function OrdersTab({orders}){
                   <StatusPill status={o.status}/>
                 </div>
                 <div style={{fontSize:14,fontWeight:600,color:C.text}}>
-                  {o.items?.[0]?.name}{(o.items?.length||0)>1?` 外 ${o.items.length-1} 項`:""}
+                  {parseItemName(o.items?.[0]?.name).mainName}{(o.items?.length||0)>1?` 外 ${o.items.length-1} 項`:""}
                 </div>
               </div>
 
@@ -767,7 +787,14 @@ function OrdersTab({orders}){
                             {it.image?.startsWith("data:")||it.image?.startsWith("http")?<img src={it.image} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:it.image||"🛒"}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,color:C.text}}>{it.name}</div>
+                            {(()=>{const {mainName,variants}=parseItemName(it.name);return(<>
+                              <div style={{fontSize:13,fontWeight:500,color:C.text}}>{mainName}</div>
+                              {variants.map((v,vi)=>(
+                                <div key={vi} style={{fontSize:11,color:C.muted,marginTop:2}}>
+                                  {v.label&&<span style={{color:C.faint,marginRight:3}}>{v.label}</span>}{v.value}
+                                </div>
+                              ))}
+                            </>)})()}
                           </div>
                           <div style={{fontSize:12,color:C.muted,whiteSpace:"nowrap"}}>×{it.qty}</div>
                           {it.price>0&&<div style={{fontSize:13,fontWeight:600,color:C.text,whiteSpace:"nowrap"}}>{fmtMoney(it.price*it.qty)}</div>}
@@ -793,8 +820,15 @@ function OrdersTab({orders}){
                             {it.image?.startsWith("data:")||it.image?.startsWith("http")?<img src={it.image} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:it.image||"🛒"}
                           </div>
                           <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:13,fontWeight:500,color:C.text}}>{it.name}</div>
-                            <div style={{fontSize:11,color:C.muted}}>×{it.qty}{it.price>0?` · ${fmtMoney(it.price*it.qty)}`:""}</div>
+                            {(()=>{const {mainName,variants}=parseItemName(it.name);return(<>
+                              <div style={{fontSize:13,fontWeight:500,color:C.text}}>{mainName}</div>
+                              {variants.map((v,vi)=>(
+                                <div key={vi} style={{fontSize:11,color:C.muted,marginTop:1}}>
+                                  {v.label&&<span style={{color:C.faint,marginRight:3}}>{v.label}</span>}{v.value}
+                                </div>
+                              ))}
+                              <div style={{fontSize:11,color:C.muted,marginTop:2}}>×{it.qty}{it.price>0?` · ${fmtMoney(it.price*it.qty)}`:""}</div>
+                            </>)})()}
                           </div>
                           <StatusPill status={itemStatus}/>
                         </div>
@@ -900,6 +934,9 @@ function MainApp({lineUser,data,setData}){
 
   useEffect(()=>{
     injectStyles();
+    // 每次進入 MainApp 重新拉最新訂單
+    supabase.from("orders").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false})
+      .then(({data:orders})=>{ if(orders) setData(d=>({...d,orders})); });
     supabase.from("members").select("*").eq("line_user_id",lineUser.userId).single().then(({data:m})=>{if(m)setMember(m);});
 
     const channel=supabase.channel("realtime-all")
