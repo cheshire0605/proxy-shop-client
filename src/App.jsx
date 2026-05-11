@@ -383,19 +383,25 @@ function ProductDetailSheet({product,onAdd,onClose,rate}){
     });
     return Object.entries(groups);
   })();
-  // 新邏輯:variant.price 是絕對 NT$ 售價(不再 ×rate)
-  // 選好款式時,直接取那個款式的 price
-  let twdPrice=0;
+  // 預設顯示:款式最低售價(讓客人一打開就看到價格)
+  // 選了款式後:顯示被選中款式的售價
+  const variantPrices=(product.variants||[]).map(v=>Number(v.price)||0).filter(x=>x>0);
+  const minPrice=variantPrices.length?Math.min(...variantPrices):0;
+  const maxPrice=variantPrices.length?Math.max(...variantPrices):0;
+  const hasRange=variantPrices.length>1&&maxPrice>minPrice;
+
+  let twdPrice=minPrice; // 預設顯示最低價
   if(hasVariants){
-    // 取目前選中的款式價格;若有多群組,取所有選中款式 price 中的最大值(避免重複加成)
     const selectedOpts=Object.entries(selVariants).map(([g,label])=>{
       const group=variantGroups.find(([gName])=>gName===g);
       return group?.[1]?.find(o=>o.label===label);
     }).filter(Boolean);
     if(selectedOpts.length>0){
+      // 有選款式:顯示該款式的售價
       twdPrice=Math.max(...selectedOpts.map(o=>Number(o.price)||0));
     }
   }
+  const someSelected=Object.keys(selVariants).length>0;
   const allSelected=variantGroups.length===0||variantGroups.every(([g])=>selVariants[g]);
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
@@ -408,12 +414,12 @@ function ProductDetailSheet({product,onAdd,onClose,rate}){
       </div>
       {twdPrice>0?(
         <div style={{background:C.accentBg,borderRadius:C.rSm,padding:"16px 18px"}}>
-          <div style={{fontSize:24,fontWeight:700,color:C.accent}}>{fmtMoney(twdPrice)}</div>
+          <div style={{fontSize:24,fontWeight:700,color:C.accent}}>
+            {someSelected||!hasRange
+              ?fmtMoney(twdPrice)
+              :`$${minPrice} - $${maxPrice}`}
+          </div>
           <div style={{fontSize:11,color:C.muted,marginTop:4}}>實際金額以業者確認為準</div>
-        </div>
-      ):variantGroups.length>0?(
-        <div style={{background:C.accentBg,borderRadius:C.rSm,padding:"16px 18px"}}>
-          <div style={{fontSize:14,color:C.muted}}>請選擇下方款式以查看價格</div>
         </div>
       ):(
         <div style={{background:C.accentBg,borderRadius:C.rSm,padding:"16px 18px"}}>
@@ -487,7 +493,7 @@ function CatalogTab({products,inStock,rate,cart,onAdd,showCart,setShowCart,updat
         <div style={{padding:"10px 12px 12px"}}>
           <div style={{fontSize:10,color:C.faint,marginBottom:3,letterSpacing:.3}}>{sanitize(p.category||"")}</div>
           <div style={{fontSize:12,lineHeight:1.4,color:C.text,marginBottom:5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{sanitize(p.name)}</div>
-          {minPrice>0?<div style={{fontSize:13,fontWeight:600,color:C.accent}}>{fmtMoney(minPrice)}{hasMultiple?" 起":""}</div>:<div style={{fontSize:11,color:C.faint}}>洽詢定價</div>}
+          {minPrice>0?<div style={{fontSize:13,fontWeight:600,color:C.accent}}>{hasMultiple?`$${minPrice} - $${Math.max(...variantPrices)}`:fmtMoney(minPrice)}</div>:<div style={{fontSize:11,color:C.faint}}>洽詢定價</div>}
         </div>
       </div>
     );
