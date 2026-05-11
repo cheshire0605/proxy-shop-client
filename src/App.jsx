@@ -222,13 +222,28 @@ function BottomNav({tab,setTab,cartCount}){
 function LineLogin({onSuccess}){
   const [status,setStatus]=useState("loading");
   const [err,setErr]=useState("");
+  const [debug,setDebug]=useState({});
+
   useEffect(()=>{
     const liffId=import.meta.env.VITE_LIFF_ID;
-    if(!liffId){setStatus("error");setErr("未設定 LIFF ID");return;}
+    const sdkLoaded=typeof liff!=="undefined";
+    setDebug({liffId:liffId||"(未設定)",sdkLoaded,ua:navigator.userAgent.slice(0,80)});
+
+    if(!liffId){setStatus("error");setErr("⚠️ 未設定 VITE_LIFF_ID 環境變數\n請在 Vercel 後台 → Settings → Environment Variables 加入 VITE_LIFF_ID,並重新部署。");return;}
+    if(!sdkLoaded){setStatus("error");setErr("⚠️ LIFF SDK 沒有載入\nindex.html 缺少 <script src=\"https://static.line-scdn.net/liff/edge/2/sdk.js\"></script>");return;}
+
     liff.init({liffId})
-      .then(()=>{if(!liff.isLoggedIn()){liff.login();return;}return liff.getProfile();})
+      .then(()=>{
+        if(!liff.isLoggedIn()){liff.login();return;}
+        return liff.getProfile();
+      })
       .then(p=>{if(!p)return;onSuccess({name:sanitize(p.displayName,50)||"朋友",userId:p.userId,pictureUrl:p.pictureUrl});})
-      .catch(()=>{setStatus("error");setErr("LINE 登入失敗，請重新整理");});
+      .catch(e=>{
+        console.error("LIFF error:",e);
+        setStatus("error");
+        const msg=e?.message||e?.code||String(e)||"未知錯誤";
+        setErr(`LINE 登入失敗\n${msg}\n\n常見原因:\n• LIFF ID 錯誤 (檢查 Vercel 環境變數)\n• Endpoint URL 跟目前網址不符 (LINE Developers 後台設定)\n• LIFF 應用已停用`);
+      });
   },[]);
   return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:32,padding:32}}>
@@ -240,8 +255,17 @@ function LineLogin({onSuccess}){
       </div>
 
       {status==="error"
-        ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
-          <div style={{fontSize:13,color:C.red,textAlign:"center",padding:"12px 20px",background:C.redBg,borderRadius:C.rSm}}>{err}</div>
+        ?<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,maxWidth:380,width:"100%"}}>
+          <div style={{fontSize:12,color:C.red,padding:"14px 18px",background:C.redBg,borderRadius:C.rSm,whiteSpace:"pre-wrap",lineHeight:1.7,width:"100%",boxSizing:"border-box"}}>{err}</div>
+          <details style={{fontSize:10,color:C.muted,width:"100%",background:C.bgDeep,borderRadius:8,padding:"8px 12px"}}>
+            <summary style={{cursor:"pointer"}}>🔍 診斷資訊</summary>
+            <div style={{marginTop:8,fontFamily:"monospace",wordBreak:"break-all"}}>
+              <div>LIFF ID: {debug.liffId}</div>
+              <div>SDK 載入: {debug.sdkLoaded?"✓":"✗"}</div>
+              <div>網址: {window.location.href}</div>
+              <div>UA: {debug.ua}</div>
+            </div>
+          </details>
           <button onClick={()=>window.location.reload()}
             style={{background:C.accent,color:"#fff",border:"none",borderRadius:99,padding:"12px 32px",fontSize:13,fontWeight:500,cursor:"pointer",letterSpacing:.5}}>
             重新整理
@@ -251,8 +275,9 @@ function LineLogin({onSuccess}){
           {/* LINE 登入按鈕 */}
           <button onClick={()=>{
             const liffId=import.meta.env.VITE_LIFF_ID;
-            if(!liffId)return;
-            if(typeof liff!=="undefined"&&!liff.isLoggedIn()){liff.login();}
+            if(!liffId){alert("未設定 LIFF ID,請聯絡管理員");return;}
+            if(typeof liff==="undefined"){alert("LIFF SDK 未載入,請重新整理");return;}
+            if(!liff.isLoggedIn()){liff.login();}
           }}
             style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:12,background:"#06C755",color:"#fff",border:"none",borderRadius:14,padding:"14px 24px",fontSize:15,fontWeight:600,cursor:"pointer",letterSpacing:.5,boxShadow:"0 4px 16px rgba(6,199,85,.25)"}}>
             <svg width={22} height={22} viewBox="0 0 24 24" fill="currentColor">
