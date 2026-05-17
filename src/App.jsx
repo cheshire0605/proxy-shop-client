@@ -300,7 +300,7 @@ function LineLogin({onSuccess}){
 }
 
 // ─── 個人資料 Tab ─────────────────────────────────────────────────
-function ProfileTab({member,setMember,lineUser,setToast}){
+function ProfileTab({member,setMember,lineUser,setToast,forced=false}){
   const [form,setForm]=useState({community_name:"",line_id:"",ig_threads:"",recipient_name:"",phone:"",seven_store:""});
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState("");
@@ -320,7 +320,7 @@ function ProfileTab({member,setMember,lineUser,setToast}){
     try{
       const{error}=await supabase.from("members").upsert([updated],{onConflict:"line_user_id"});
       if(error)throw error;
-      setMember(updated);setToast("資料已儲存 ✅");
+      setMember(updated);setToast(forced?"歡迎加入,開始逛賣場吧 🎉":"資料已儲存 ✅");
     }catch{setErr("儲存失敗，請稍後再試");}
     setSaving(false);
   };
@@ -336,6 +336,12 @@ function ProfileTab({member,setMember,lineUser,setToast}){
 
   return(
     <div style={{padding:"20px 16px 100px"}}>
+      {forced&&(
+        <div style={{padding:"14px 16px",background:C.accent,color:"#fff",borderRadius:C.rSm,marginBottom:18,boxShadow:C.shadow}}>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>👋 歡迎,{lineUser.name}!</div>
+          <div style={{fontSize:12,lineHeight:1.6,opacity:.95}}>首次使用請先填寫個人資料,完成後即可開始下單。後續可在「我的」隨時修改。</div>
+        </div>
+      )}
       {/* 頭像區 */}
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24}}>
         <div style={{width:56,height:56,borderRadius:"50%",background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>
@@ -976,15 +982,19 @@ function MainApp({lineUser,data,setData}){
   const [tab,setTab]=useState("catalog");
   const [cart,setCart]=useState([]);
   const [toast,setToast]=useState(null);
-  const [member,setMember]=useState({});
+  const [member,setMember]=useState(null); // null=未載入, {}=載完但沒資料
+  const [memberLoaded,setMemberLoaded]=useState(false);
   const [showCart,setShowCart]=useState(false);
+
+  // 個資完整性檢查:四個必填欄位都要有值
+  const isProfileComplete=!!(member?.community_name?.trim()&&member?.ig_threads?.trim()&&member?.recipient_name?.trim()&&member?.phone?.trim());
 
   useEffect(()=>{
     injectStyles();
     // 每次進入 MainApp 重新拉最新訂單
     supabase.from("orders").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false})
       .then(({data:orders})=>{ if(orders) setData(d=>({...d,orders})); });
-    supabase.from("members").select("*").eq("line_user_id",lineUser.userId).single().then(({data:m})=>{if(m)setMember(m);});
+    supabase.from("members").select("*").eq("line_user_id",lineUser.userId).single().then(({data:m})=>{setMember(m||{});setMemberLoaded(true);});
 
     const channel=supabase.channel("realtime-all")
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"orders",filter:`customer_line_id=eq.${lineUser.userId}`},
@@ -1079,6 +1089,30 @@ function MainApp({lineUser,data,setData}){
     catalog:"商品下單",profile:`Hi, ${lineUser.name}`,
     wishlist:"許願清單",orders:"我的訂單",shipments:"出貨紀錄",
   };
+
+  // member 還沒載入完 → 顯示載入畫面
+  if(!memberLoaded){
+    return(
+      <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12}}>
+        <div style={{width:24,height:24,borderRadius:"50%",border:`2px solid ${C.faint}`,borderTopColor:C.accent,animation:"spin 1s linear infinite"}}/>
+        <div style={{fontSize:12,color:C.faint,letterSpacing:.5}}>載入會員資料</div>
+      </div>
+    );
+  }
+
+  // 個資未填齊 → 強制顯示填寫頁(沒有 BottomNav、沒有購物車、沒有登出以外的功能)
+  if(!isProfileComplete){
+    return(
+      <div style={{minHeight:"100vh",background:C.bg,maxWidth:480,margin:"0 auto",paddingBottom:60}}>
+        <div style={{padding:"20px 20px 0",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:C.bg,zIndex:50,paddingBottom:12,borderBottom:`1px solid ${C.borderLight}`}}>
+          <div style={{fontSize:18,fontWeight:600,color:C.text,letterSpacing:.3}}>建立會員資料</div>
+          <button onClick={()=>{if(typeof liff!=="undefined")liff.logout();window.location.reload();}} style={{background:"none",border:"none",fontSize:12,color:C.faint,cursor:"pointer"}}>登出</button>
+        </div>
+        <ProfileTab member={member} setMember={setMember} lineUser={lineUser} setToast={setToast} forced={true}/>
+        {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
+      </div>
+    );
+  }
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,maxWidth:480,margin:"0 auto",paddingBottom:60}}>
