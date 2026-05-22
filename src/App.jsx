@@ -318,10 +318,19 @@ function ProfileTab({member,setMember,lineUser,setToast,forced=false}){
     setSaving(true);
     const updated={line_user_id:lineUser.userId,line_name:lineUser.name,community_name:sanitize(form.community_name,100),line_id:sanitize(form.line_id,100),ig_threads:sanitize(form.ig_threads,200),recipient_name:sanitize(form.recipient_name,50),phone:sanitize(form.phone,20),seven_store:sanitize(form.seven_store,100),updated_at:new Date().toISOString()};
     try{
-      const{error}=await supabase.from("members").upsert([updated],{onConflict:"line_user_id"});
+      const{error,data:savedRows}=await supabase.from("members").upsert([updated],{onConflict:"line_user_id"}).select();
       if(error)throw error;
-      setMember(updated);setToast(forced?"歡迎加入,開始逛賣場吧 🎉":"資料已儲存 ✅");
-    }catch{setErr("儲存失敗，請稍後再試");}
+      // 確認真的有寫入(回傳 0 筆 = RLS 擋住,但沒報錯)
+      if(!savedRows||savedRows.length===0){
+        throw new Error("資料未寫入(可能是權限設定問題,請聯絡客服)");
+      }
+      setMember(savedRows[0]||updated);
+      setToast(forced?"歡迎加入,開始逛賣場吧 🎉":"資料已儲存 ✅");
+    }catch(e){
+      console.error("儲存失敗:",e);
+      const msg=e?.message||"未知錯誤";
+      setErr(`儲存失敗:${msg}`);
+    }
     setSaving(false);
   };
 
