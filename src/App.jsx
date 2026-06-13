@@ -971,33 +971,42 @@ function OrdersTab({orders}){
 }
 
 // ─── 出貨 Tab ─────────────────────────────────────────────────────
-// 賣貨便商店連結(固定)
-const SHOPEE_SHIP_URL = "https://shopee.tw/m/seller-coin";  // ← 改成你的賣貨便網址
+// (賣貨便連結改從 Supabase settings 表讀取)
 
-function ShipmentsTab({orders}){
-  const [filter,setFilter]=useState("all");
-  const shipped=["shipped","arrived"];
-  const threeMonthsAgo=new Date();threeMonthsAgo.setMonth(threeMonthsAgo.getMonth()-3);
-  const filtered=orders.filter(o=>{
-    if(filter==="pending")return!shipped.includes(o.status)&&o.status!=="cancelled";
-    if(filter==="shipped")return shipped.includes(o.status)&&new Date(o.created_at||o.createdAt)>threeMonthsAgo;
-    return shipped.includes(o.status)||(!shipped.includes(o.status)&&o.status!=="cancelled");
+function ShipmentsTab({orders, shopeeUrl}){
+  const [filter,setFilter]=useState("active"); // active=進行中 / done=已完成
+  const isShipped = s => s === "shipped" || s === "arrived";
+  const isDone    = s => isShipped(s) || s === "archived";
+  const isActive  = s => !isDone(s) && s !== "cancelled";
+
+  const filtered = orders.filter(o => {
+    if (filter === "active") return isActive(o.status);
+    if (filter === "done")   return isDone(o.status);
+    return false;
   });
+
+  const activeCount = orders.filter(o => isActive(o.status)).length;
+  const doneCount = orders.filter(o => isDone(o.status)).length;
 
   return(
     <div style={{padding:"16px 16px 100px",display:"flex",flexDirection:"column",gap:14}}>
-      {/* 篩選 */}
-      <div style={{display:"flex",alignItems:"center",gap:8,overflowX:"auto",scrollbarWidth:"none"}}>
-        {[["all","全部"],["pending","待出貨"],["shipped","已出貨"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setFilter(v)} style={{padding:"7px 16px",borderRadius:99,fontSize:12,whiteSpace:"nowrap",cursor:"pointer",border:`1.5px solid ${filter===v?C.accent:C.border}`,background:filter===v?C.accentBg:"transparent",color:filter===v?C.accent:C.muted,fontWeight:filter===v?500:400}}>
-            {l}
-          </button>
-        ))}
-        <div style={{marginLeft:"auto",fontSize:12,color:C.faint}}>{filtered.length} 筆</div>
+      {/* 兩個 tab */}
+      <div style={{display:"flex",background:C.bgDeep,borderRadius:12,padding:4,gap:0}}>
+        <button onClick={()=>setFilter("active")}
+          style={{flex:1,padding:"10px 12px",borderRadius:9,border:"none",fontSize:13,fontWeight:filter==="active"?600:400,cursor:"pointer",background:filter==="active"?"#fff":"transparent",color:filter==="active"?C.text:C.muted,boxShadow:filter==="active"?"0 2px 6px rgba(0,0,0,.06)":"none",transition:"all .15s"}}>
+          🚚 進行中 <span style={{fontSize:11,opacity:.7,marginLeft:4}}>({activeCount})</span>
+        </button>
+        <button onClick={()=>setFilter("done")}
+          style={{flex:1,padding:"10px 12px",borderRadius:9,border:"none",fontSize:13,fontWeight:filter==="done"?600:400,cursor:"pointer",background:filter==="done"?"#fff":"transparent",color:filter==="done"?C.text:C.muted,boxShadow:filter==="done"?"0 2px 6px rgba(0,0,0,.06)":"none",transition:"all .15s"}}>
+          ✓ 已完成 <span style={{fontSize:11,opacity:.7,marginLeft:4}}>({doneCount})</span>
+        </button>
       </div>
 
       {!filtered.length
-        ?<Card style={{padding:"40px 20px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>📦</div><div style={{fontSize:13,color:C.faint}}>沒有出貨資料</div></Card>
+        ?<Card style={{padding:"40px 20px",textAlign:"center"}}>
+          <div style={{fontSize:32,marginBottom:8}}>{filter==="active"?"📦":"✓"}</div>
+          <div style={{fontSize:13,color:C.faint}}>{filter==="active"?"沒有進行中的訂單":"沒有已完成的訂單"}</div>
+        </Card>
         :filtered.map((o,i)=>{
           const createdDate=o.created_at?new Date(o.created_at).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"}):(o.createdAt||"");
           const itemsTotal=(o.items||[]).reduce((s,it)=>s+(Number(it.price)||0)*(Number(it.qty)||1),0);
@@ -1052,9 +1061,9 @@ function ShipmentsTab({orders}){
                 </div>
               </div>
 
-              {/* 賣貨便結單按鈕 (只在已出貨或已到台才出現) */}
-              {shipped.includes(o.status)&&(
-                <a href={SHOPEE_SHIP_URL} target="_blank" rel="noopener noreferrer"
+              {/* 賣貨便結單按鈕 (進行中且狀態是已寄出/已到台才出現) */}
+              {filter==="active" && isShipped(o.status) && shopeeUrl && (
+                <a href={shopeeUrl} target="_blank" rel="noopener noreferrer"
                   style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"14px",background:C.text,color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,letterSpacing:.5}}>
                   下一步至賣貨便結單
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>
@@ -1076,6 +1085,7 @@ function MainApp({lineUser,data,setData}){
   const [member,setMember]=useState(null); // null=未載入, {}=載完但沒資料
   const [memberLoaded,setMemberLoaded]=useState(false);
   const [showCart,setShowCart]=useState(false);
+  const [shopeeUrl,setShopeeUrl]=useState("");
 
   // 個資完整性檢查:四個必填欄位都要有值
   const isProfileComplete=!!(member?.community_name?.trim()&&member?.ig_threads?.trim()&&member?.recipient_name?.trim()&&member?.phone?.trim());
@@ -1086,6 +1096,10 @@ function MainApp({lineUser,data,setData}){
     supabase.from("orders").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false})
       .then(({data:orders})=>{ if(orders) setData(d=>({...d,orders})); });
     supabase.from("members").select("*").eq("line_user_id",lineUser.userId).single().then(({data:m})=>{setMember(m||{});setMemberLoaded(true);});
+    // 載入賣貨便連結
+    supabase.from("settings").select("*").eq("key","shopee_ship_url").maybeSingle()
+      .then(({data:s})=>{ if(s?.value) setShopeeUrl(s.value); })
+      .catch(()=>{});
 
     const channel=supabase.channel("realtime-all")
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"orders",filter:`customer_line_id=eq.${lineUser.userId}`},
@@ -1252,7 +1266,7 @@ function MainApp({lineUser,data,setData}){
       {tab==="catalog"&&<CatalogTab products={data.products} inStock={data.inStock} rate={data.rate} cart={cart} onAdd={addToCart} showCart={showCart} setShowCart={setShowCart} updateCartQty={updateCartQty} removeFromCart={removeFromCart} submitOrder={submitOrder}/>}
       {tab==="wishlist"&&<WishlistTab wishes={myWishes} onAddWish={addWish} onDeleteWish={deleteWish} onAddToCart={addToCart} setTab={setTab}/>}
       {tab==="orders"&&<OrdersTab orders={myOrders}/>}
-      {tab==="shipments"&&<ShipmentsTab orders={myOrders}/>}
+      {tab==="shipments"&&<ShipmentsTab orders={myOrders} shopeeUrl={shopeeUrl}/>}
 
       {/* Bottom Nav */}
       <BottomNav tab={tab} setTab={setTab} cartCount={cart.reduce((s,c)=>s+c.qty,0)}/>
