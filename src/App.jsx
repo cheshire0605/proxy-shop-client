@@ -975,9 +975,9 @@ function OrdersTab({orders}){
 
 function ShipmentsTab({orders, shopeeUrl}){
   const [filter,setFilter]=useState("active"); // active=進行中 / done=已完成
-  const isShipped = s => s === "shipped" || s === "arrived";
-  const isDone    = s => isShipped(s) || s === "archived";
-  const isActive  = s => !isDone(s) && s !== "cancelled";
+  const canCheckout = s => s === "arrived" || s === "shipped"; // 可結單(顯示賣貨便按鈕)
+  const isDone      = s => s === "shipped" || s === "archived"; // 已完成:已寄出 / 已封存
+  const isActive    = s => !isDone(s) && s !== "cancelled";     // 進行中:其他
 
   const filtered = orders.filter(o => {
     if (filter === "active") return isActive(o.status);
@@ -1061,8 +1061,8 @@ function ShipmentsTab({orders, shopeeUrl}){
                 </div>
               </div>
 
-              {/* 賣貨便結單按鈕 (進行中且狀態是已寄出/已到台才出現) */}
-              {filter==="active" && isShipped(o.status) && shopeeUrl && (
+              {/* 賣貨便結單按鈕 (已到台/已寄出 才出現) */}
+              {canCheckout(o.status) && shopeeUrl && (
                 <a href={shopeeUrl} target="_blank" rel="noopener noreferrer"
                   style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"14px",background:C.text,color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,letterSpacing:.5}}>
                   下一步至賣貨便結單
