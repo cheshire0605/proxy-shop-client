@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -1090,11 +1090,31 @@ function MainApp({lineUser,data,setData}){
   // 個資完整性檢查:四個必填欄位都要有值
   const isProfileComplete=!!(member?.community_name?.trim()&&member?.ig_threads?.trim()&&member?.recipient_name?.trim()&&member?.phone?.trim());
 
+  // 抽出載入函式,可重用
+  const reloadData = useCallback(async ()=>{
+    try {
+      const [ordersRes, productsRes, inStockRes, wishlistRes, annRes] = await Promise.all([
+        supabase.from("orders").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false}),
+        supabase.from("products").select("*").order("created_at",{ascending:false}),
+        supabase.from("in_stock").select("*").order("created_at",{ascending:false}),
+        supabase.from("wishlist").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false}),
+        supabase.from("announcements").select("*").order("created_at",{ascending:false}),
+      ]);
+      setData(d=>({
+        ...d,
+        orders: ordersRes.data || d.orders,
+        products: productsRes.data || d.products,
+        inStock: inStockRes.data || d.inStock,
+        wishlist: wishlistRes.data || d.wishlist,
+        announcements: annRes.data || d.announcements,
+      }));
+      console.log(`📊 客人端已載入: 訂單 ${(ordersRes.data||[]).length}, 商品 ${(productsRes.data||[]).length}, 許願 ${(wishlistRes.data||[]).length}`);
+    } catch (e) { console.error("Reload 失敗:", e); }
+  }, [lineUser.userId, setData]);
+
   useEffect(()=>{
     injectStyles();
-    // 每次進入 MainApp 重新拉最新訂單
-    supabase.from("orders").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false})
-      .then(({data:orders})=>{ if(orders) setData(d=>({...d,orders})); });
+    reloadData(); // 初次載入
     supabase.from("members").select("*").eq("line_user_id",lineUser.userId).single().then(({data:m})=>{setMember(m||{});setMemberLoaded(true);});
     // 載入賣貨便連結
     supabase.from("settings").select("*").eq("key","shopee_ship_url").maybeSingle()
@@ -1140,9 +1160,22 @@ function MainApp({lineUser,data,setData}){
       .on("postgres_changes",{event:"DELETE",schema:"public",table:"wishlist"},
         (payload)=>{setData(d=>({...d,wishlist:d.wishlist.filter(w=>w.id!==payload.old.id)}));}
       )
-      .subscribe();
-    return()=>{supabase.removeChannel(channel);};
-  },[]);
+      .subscribe((status)=>{
+        console.log("📡 客人端 Realtime status:", status);
+      });
+
+    // 30 秒輪詢備援
+    const heartbeat = setInterval(() => { reloadData(); }, 30000);
+
+    return()=>{ supabase.removeChannel(channel); clearInterval(heartbeat); };
+  },[reloadData,lineUser.userId,setData]);
+
+  // 切換分頁時自動拉最新資料
+  useEffect(()=>{
+    if (["catalog","orders","shipments","wishlist"].includes(tab)) {
+      reloadData();
+    }
+  }, [tab, reloadData]);
 
   const myOrders=data.orders.filter(o=>o.customer_line_id===lineUser.userId||o.customerId==="me");
   const myWishes=data.wishlist.filter(w=>w.customer_line_id===lineUser.userId||w.customerId==="me");
