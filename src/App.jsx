@@ -485,6 +485,17 @@ function CatalogTab({products,inStock,rate,cart,onAdd,showCart,setShowCart,updat
   const [showManual,setShowManual]=useState(false);
   const [mName,setMName]=useState("");
   const [mPrice,setMPrice]=useState("");
+  const [payAmount,setPayAmount]=useState("");
+  const [payLast5,setPayLast5]=useState("");
+
+  const doSubmit=()=>{
+    submitOrder({
+      payAmount: Number(payAmount) || 0,
+      payLast5: payLast5 || "",
+    });
+    setPayAmount("");
+    setPayLast5("");
+  };
 
   const inCart=id=>cart.find(c=>c.id===id);
   const activeProducts=products.filter(p=>p.status==="on");
@@ -618,7 +629,30 @@ function CatalogTab({products,inStock,rate,cart,onAdd,showCart,setShowCart,updat
                 <div style={{fontSize:13,color:C.muted}}>{cart.length} 項商品</div>
                 <div style={{fontSize:20,fontWeight:700,color:C.text}}>{fmtMoney(cart.reduce((s,c)=>s+safePrice(c.price)*safeQty(c.qty),0))}</div>
               </div>
-              <Btn full onClick={submitOrder}>確認送出</Btn>
+
+              {/* 付款資訊輸入 */}
+              <div style={{background:C.bgDeep,borderRadius:C.rSm,padding:"14px 16px",marginBottom:12,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:11,color:C.muted,marginBottom:10,letterSpacing:.5,fontWeight:600}}>💰 匯款資訊(訂金或全額)</div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div>
+                    <label style={{fontSize:11,color:C.textMid,display:"block",marginBottom:4}}>匯款金額 NT$</label>
+                    <input type="number" inputMode="numeric" value={payAmount} onChange={e=>setPayAmount(e.target.value)}
+                      placeholder="例如:500"
+                      style={{width:"100%",padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:14,boxSizing:"border-box",background:"#fff",color:C.text}}/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11,color:C.textMid,display:"block",marginBottom:4}}>匯款帳號末 5 碼</label>
+                    <input type="text" inputMode="numeric" maxLength={5} value={payLast5} onChange={e=>setPayLast5(e.target.value.replace(/\D/g,"").slice(0,5))}
+                      placeholder="例如:12345"
+                      style={{width:"100%",padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:14,boxSizing:"border-box",background:"#fff",color:C.text,letterSpacing:2}}/>
+                  </div>
+                  <div style={{fontSize:10,color:C.faint,lineHeight:1.6,padding:"4px 2px"}}>
+                    填寫後業者較快核對,可先匯訂金或不填(送出後再補)
+                  </div>
+                </div>
+              </div>
+
+              <Btn full onClick={doSubmit}>確認送出訂單</Btn>
               <div style={{fontSize:11,color:C.faint,textAlign:"center",marginTop:12,lineHeight:1.8}}>送出後業者確認並與您聯繫<br/>代購最終價格以業者報價為準</div>
             </>
           }
@@ -937,6 +971,9 @@ function OrdersTab({orders}){
 }
 
 // ─── 出貨 Tab ─────────────────────────────────────────────────────
+// 賣貨便商店連結(固定)
+const SHOPEE_SHIP_URL = "https://shopee.tw/m/seller-coin";  // ← 改成你的賣貨便網址
+
 function ShipmentsTab({orders}){
   const [filter,setFilter]=useState("all");
   const shipped=["shipped","arrived"];
@@ -949,6 +986,7 @@ function ShipmentsTab({orders}){
 
   return(
     <div style={{padding:"16px 16px 100px",display:"flex",flexDirection:"column",gap:14}}>
+      {/* 篩選 */}
       <div style={{display:"flex",alignItems:"center",gap:8,overflowX:"auto",scrollbarWidth:"none"}}>
         {[["all","全部"],["pending","待出貨"],["shipped","已出貨"]].map(([v,l])=>(
           <button key={v} onClick={()=>setFilter(v)} style={{padding:"7px 16px",borderRadius:99,fontSize:12,whiteSpace:"nowrap",cursor:"pointer",border:`1.5px solid ${filter===v?C.accent:C.border}`,background:filter===v?C.accentBg:"transparent",color:filter===v?C.accent:C.muted,fontWeight:filter===v?500:400}}>
@@ -961,23 +999,67 @@ function ShipmentsTab({orders}){
       {!filtered.length
         ?<Card style={{padding:"40px 20px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>📦</div><div style={{fontSize:13,color:C.faint}}>沒有出貨資料</div></Card>
         :filtered.map((o,i)=>{
-          const createdDate=o.created_at?new Date(o.created_at).toLocaleDateString("zh-TW"):(o.createdAt||"");
+          const createdDate=o.created_at?new Date(o.created_at).toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"}):(o.createdAt||"");
+          const itemsTotal=(o.items||[]).reduce((s,it)=>s+(Number(it.price)||0)*(Number(it.qty)||1),0);
+          const shippingFee=Number(o.shipping_fee||o.shippingFee||0);
+          const grandTotal=itemsTotal+shippingFee;
           return(
             <Card key={o.id} className="fadeUp" style={{animationDelay:`${i*.04}s`,padding:0,overflow:"hidden"}}>
-              <div style={{padding:"16px 18px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                  <div>
-                    <div style={{fontSize:11,color:C.faint,marginBottom:2}}>#{o.no} · {createdDate}</div>
-                    <div style={{fontSize:14,fontWeight:600,color:C.text}}>{o.items?.[0]?.name}{(o.items?.length||0)>1?` 外 ${o.items.length-1} 項`:""}</div>
-                  </div>
-                  <StatusPill status={o.status}/>
+              {/* 訂單頭部 */}
+              <div style={{padding:"14px 18px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.borderLight}`}}>
+                <div>
+                  <div style={{fontSize:11,color:C.faint,marginBottom:2}}>#{o.no}</div>
+                  <div style={{fontSize:13,fontWeight:500,color:C.text}}>📅 {createdDate}</div>
                 </div>
-                <div style={{fontSize:11,color:C.muted}}>{(o.items||[]).map(it=>`${it.name} ×${it.qty}`).join("・")}</div>
+                <StatusPill status={o.status}/>
               </div>
-              <div style={{padding:"10px 18px 14px",borderTop:`1px solid ${C.borderLight}`,background:C.bgDeep,display:"flex",justifyContent:"space-between"}}>
-                <div style={{fontSize:11,color:C.muted}}>{(o.items||[]).length} 項商品</div>
-                <div style={{fontSize:14,fontWeight:700,color:C.accent}}>{fmtMoney(o.total)}</div>
+
+              {/* 條列式品項明細 */}
+              <div style={{padding:"14px 18px"}}>
+                <div style={{fontSize:10,color:C.faint,letterSpacing:1,marginBottom:10,fontWeight:600}}>商品明細</div>
+                {(o.items||[]).map((it,idx)=>(
+                  <div key={idx} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 0",borderBottom:idx<(o.items.length-1)?`0.5px dashed ${C.borderLight}`:"none"}}>
+                    {it.image&&(it.image.startsWith("data:")||it.image.startsWith("http"))?(
+                      <img src={it.image} alt="" style={{width:42,height:42,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
+                    ):(
+                      <div style={{width:42,height:42,borderRadius:8,background:C.bgDeep,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🛒</div>
+                    )}
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,color:C.text,fontWeight:500,lineHeight:1.3}}>{it.name}</div>
+                      {it.note&&<div style={{fontSize:11,color:C.muted,marginTop:2}}>{it.note}</div>}
+                      <div style={{fontSize:11,color:C.faint,marginTop:3}}>× {it.qty}</div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:C.accent}}>{fmtMoney((it.price||0)*(it.qty||1))}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
+
+              {/* 金額明細 */}
+              <div style={{padding:"12px 18px",background:C.bgDeep,borderTop:`1px dashed ${C.borderLight}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.muted,padding:"3px 0"}}>
+                  <span>商品小計</span><span>{fmtMoney(itemsTotal)}</span>
+                </div>
+                {shippingFee>0&&(
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.muted,padding:"3px 0"}}>
+                    <span>運費</span><span>{fmtMoney(shippingFee)}</span>
+                  </div>
+                )}
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:600,color:C.text,paddingTop:8,marginTop:6,borderTop:`1px solid ${C.borderLight}`}}>
+                  <span>TOTAL</span>
+                  <span style={{color:C.accent,fontSize:18,fontWeight:700}}>{fmtMoney(grandTotal)}</span>
+                </div>
+              </div>
+
+              {/* 賣貨便結單按鈕 (只在已出貨或已到台才出現) */}
+              {shipped.includes(o.status)&&(
+                <a href={SHOPEE_SHIP_URL} target="_blank" rel="noopener noreferrer"
+                  style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"14px",background:C.text,color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,letterSpacing:.5}}>
+                  下一步至賣貨便結單
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>
+                </a>
+              )}
             </Card>
           );
         })
@@ -1059,18 +1141,44 @@ function MainApp({lineUser,data,setData}){
   const updateCartQty=(id,delta)=>setCart(p=>p.map(c=>c.id===id?{...c,qty:Math.max(1,Math.min(99,c.qty+delta))}:c));
   const removeFromCart=id=>setCart(p=>p.filter(c=>c.id!==id));
 
-  const submitOrder=async()=>{
+  const submitOrder=async(payInfo={})=>{
     if(!cart.length)return;
     const no=secureOrderNo();
     const items=cart.map(c=>({name:sanitize(c.name,100),qty:safeQty(c.qty),price:safePrice(c.price),note:sanitize(c.note||"",200),image:c.image||""}));
     const total=items.reduce((s,c)=>s+c.price*c.qty,0);
-    const orderData={id:secureUid(),no,customer_line_id:lineUser.userId,customer_name:sanitize(lineUser.name,50)||"匿名",status:"pending_review",items,total,created_at:new Date().toISOString()};
+    const orderData={
+      id:secureUid(),no,
+      customer_line_id:lineUser.userId,
+      customer_name:sanitize(lineUser.name,50)||"匿名",
+      status:"pending_review",
+      items,total,
+      deposit_amount: Number(payInfo.payAmount) || 0,
+      deposit_last5: sanitize(payInfo.payLast5 || "", 5),
+      deposit_paid: (Number(payInfo.payAmount) > 0),
+      created_at:new Date().toISOString(),
+    };
     try{
       const{data:saved,error}=await supabase.from("orders").insert([orderData]).select().single();
       if(error)throw error;
       setData(d=>({...d,orders:[saved,...d.orders]}));
-      setCart([]);setShowCart(false);setTab("orders");setToast("訂單已送出 🌸");
-    }catch(e){console.error(e);alert("下單失敗，請稍後再試");}
+      setCart([]);setShowCart(false);setTab("orders");
+      setToast(payInfo.payAmount>0?`訂單已送出 · 已記錄匯款 NT$${payInfo.payAmount} 🌸`:"訂單已送出 🌸");
+    }catch(e){
+      console.error(e);
+      // 如果 Supabase 還沒有 deposit_* 欄位,fallback 不帶這些欄位重試
+      if(e.message&&/deposit_/.test(e.message)){
+        const{deposit_amount,deposit_last5,deposit_paid,...rest}=orderData;
+        const{data:saved2,error:e2}=await supabase.from("orders").insert([rest]).select().single();
+        if(!e2){
+          setData(d=>({...d,orders:[saved2,...d.orders]}));
+          setCart([]);setShowCart(false);setTab("orders");
+          setToast("訂單已送出(匯款資訊未存,請聯繫業者)");
+          alert("⚠️ 訂單已建立,但匯款資訊未儲存。請聯繫業者並提供匯款金額與末 5 碼。");
+          return;
+        }
+      }
+      alert("下單失敗:"+(e.message||"請稍後再試"));
+    }
   };
 
   const addWish=async(name,note,imgUrl,link)=>{
