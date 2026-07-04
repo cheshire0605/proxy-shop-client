@@ -72,6 +72,16 @@ export function OrderDetailPage(){
     setMsg("已儲存 ✅"); load();
   };
 
+  // 封存：客人端不再顯示（不影響後台）
+  const toggleArchive = async () => {
+    setMsg("");
+    const next = !order.archived;
+    const { error } = await supabase.from("orders").update({ archived: next, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) { setMsg("更新失敗：" + error.message); return; }
+    setOrder(o=>({ ...o, archived: next }));
+    setMsg(next ? "已封存（客人端不顯示）" : "已取消封存");
+  };
+
   const setItemPurchase = async (itemId, status) => {
     setItems(items.map(it => it.id===itemId ? { ...it, purchase_status: status } : it));
     await supabase.from("order_items").update({ purchase_status: status }).eq("id", itemId);
@@ -92,6 +102,7 @@ export function OrderDetailPage(){
           {order.status!=="cancelled" && (
             <button onClick={()=>{ if(window.confirm("確定取消這張訂單？")) updateStatus("cancelled"); }} style={{background:C.redBg,color:C.red,border:`1px solid ${C.red}40`,borderRadius:99,padding:"7px 16px",fontSize:13,cursor:"pointer"}}>取消訂單</button>
           )}
+          <button onClick={toggleArchive} style={{background:C.bgDeep,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:99,padding:"7px 16px",fontSize:13,cursor:"pointer"}}>{order.archived?"取消封存":"封存"}</button>
         </div>
       </div>
 
@@ -133,8 +144,10 @@ export function OrderDetailPage(){
           <div style={{display:"flex",justifyContent:"space-between"}}><span>訂單總金額</span><b>{fmtMoney(p.total)}</b></div>
           <div style={{display:"flex",justifyContent:"space-between"}}><span>已收總額</span><span>{fmtMoney(p.totalReceived)}</span></div>
           <div style={{display:"flex",justifyContent:"space-between"}}><span>待收金額</span><span style={{color:p.pending>0?C.amber:C.green}}>{fmtMoney(p.pending)}</span></div>
+          {order.deposit_bank && <div style={{display:"flex",justifyContent:"space-between"}}><span>匯款銀行</span><span>{order.deposit_bank}</span></div>}
           <div style={{display:"flex",justifyContent:"space-between",marginTop:6,paddingTop:6,borderTop:`1px solid ${C.border}`}}><span>付款狀態</span><b>{p.paymentStatus}</b></div>
           <div style={{display:"flex",justifyContent:"space-between"}}><span>可出貨狀態</span><b style={{color:C.accent}}>{p.shippable}</b></div>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>利潤（總額−成本）</span><b style={{color:C.green}}>{fmtMoney(order.profit||0)}</b></div>
         </div>
       </div>
 

@@ -5,6 +5,12 @@ export const safeQty = n => { const v=parseInt(n,10); return Number.isFinite(v)&
 export const safePrice = n => { const v=Number(n); return Number.isFinite(v)&&v>=0?Math.round(v*100)/100:0; };
 export const secureOrderNo = () => { const a=new Uint32Array(1); crypto.getRandomValues(a); return String(100000+(a[0]%900000)); };
 export const fmtMoney = n => `NT$ ${Number(n||0).toLocaleString()}`;
+// 短日期 yyyy/mm/dd（結單日期、預計到貨顯示用）
+export const formatShortDate = d => {
+  if (!d) return "";
+  try { const dt=new Date(d); return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,"0")}/${String(dt.getDate()).padStart(2,"0")}`; }
+  catch { return d; }
+};
 // 判斷是否為圖片來源（網址或 base64），否則當 emoji/文字顯示
 export const isImgSrc = s => !!s && (s.startsWith("data:") || s.startsWith("http"));
 

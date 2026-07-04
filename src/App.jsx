@@ -29,6 +29,7 @@ function MainApp({lineUser,data,setData}){
   const [memberLoaded,setMemberLoaded]=useState(false);
   const [showCart,setShowCart]=useState(false);
   const [shopeeUrl,setShopeeUrl]=useState("");
+  const [autoCancelHours,setAutoCancelHours]=useState(36);
 
   // 個資完整性檢查:四個必填欄位都要有值
   const isProfileComplete=!!(member?.community_name?.trim()&&member?.ig_threads?.trim()&&member?.recipient_name?.trim()&&member?.phone?.trim());
@@ -59,10 +60,14 @@ function MainApp({lineUser,data,setData}){
     // 讀取自己的會員資料（RLS 會限定只讀得到本人）
     supabase.from("members").select("*").eq("line_user_id",lineUser.userId).single().then(({data:m})=>{setMember(m||{});setMemberLoaded(true);});
     reloadData(); // 初次載入（真資料）
-    // 載入賣貨便連結
-    supabase.from("settings").select("*").eq("key","shopee_ship_url").maybeSingle()
-      .then(({data:s})=>{ if(s?.value) setShopeeUrl(s.value); })
-      .catch(()=>{});
+    // 載入賣貨便連結 + 逾期自動取消時數
+    Promise.all([
+      supabase.from("settings").select("*").eq("key","shopee_ship_url").maybeSingle(),
+      supabase.from("settings").select("*").eq("key","auto_cancel_hours").maybeSingle(),
+    ]).then(([s1,s2])=>{
+      if(s1.data?.value) setShopeeUrl(s1.data.value);
+      if(s2.data?.value) setAutoCancelHours(Number(s2.data.value)||36);
+    }).catch(()=>{});
 
     const channel=supabase.channel("realtime-all")
       .on("postgres_changes",{event:"UPDATE",schema:"public",table:"orders",filter:`customer_line_id=eq.${lineUser.userId}`},
@@ -111,7 +116,7 @@ function MainApp({lineUser,data,setData}){
     }
   }, [tab, reloadData]);
 
-  const myOrders=data.orders.filter(o=>o.customer_line_id===lineUser.userId||o.customerId==="me");
+  const myOrders=data.orders.filter(o=>(o.customer_line_id===lineUser.userId||o.customerId==="me")&&!o.archived);
   const myWishes=data.wishlist.filter(w=>w.customer_line_id===lineUser.userId||w.customerId==="me");
 
   const addToCart=item=>{
@@ -133,18 +138,20 @@ function MainApp({lineUser,data,setData}){
       total: cart.reduce((s,c)=>s+safePrice(c.price)*safeQty(c.qty),0),
       deposit_paid: Number(payInfo.payAmount) || 0,
       deposit_last5: sanitize(payInfo.payLast5 || "", 5),
+      deposit_bank: sanitize(payInfo.payBank || "", 100),
       recipient_name: sanitize(ship.recipient_name || "", 50),
       recipient_phone: sanitize(ship.recipient_phone || "", 20),
       recipient_store: sanitize(ship.recipient_store || "", 100),
     };
     const p_items=cart.map(c=>{
+      const pay={ payment_type: c.payment_type||"full", deposit_amount: Number(c.deposit_amount)||0, cost: Number(c.cost)||0 };
       if(c.variant_id){
         // 有 variant_id（代購或現貨皆是）→ RPC 依 variant 是否有庫存決定要不要扣
-        return { product_name: sanitize(c.product_name||c.name,100), spec: sanitize(c.spec||"",100), qty: safeQty(c.qty), price: safePrice(c.price), image: c.image||"", note: sanitize(c.note||"",200), variant_id: c.variant_id };
+        return { product_name: sanitize(c.product_name||c.name,100), spec: sanitize(c.spec||"",100), qty: safeQty(c.qty), price: safePrice(c.price), image: c.image||"", note: sanitize(c.note||"",200), variant_id: c.variant_id, ...pay };
       }
       const{mainName,variants}=parseItemName(sanitize(c.name,100));
       const spec=variants.map(v=>v.label?`${v.label}：${v.value}`:v.value).join(" / ");
-      return { product_name: mainName, spec, qty: safeQty(c.qty), price: safePrice(c.price), image: c.image||"", note: sanitize(c.note||"",200), variant_id: null };
+      return { product_name: mainName, spec, qty: safeQty(c.qty), price: safePrice(c.price), image: c.image||"", note: sanitize(c.note||"",200), variant_id: null, ...pay };
     });
     try{
       const{data:savedOrder,error}=await supabase.rpc("place_order",{ p_order, p_items });
@@ -235,7 +242,7 @@ function MainApp({lineUser,data,setData}){
 
       {/* Content */}
       {tab==="profile"&&<ProfileTab member={member} setMember={setMember} lineUser={lineUser} setToast={setToast}/>}
-      {tab==="catalog"&&<CatalogTab products={data.products} categories={data.categories} cart={cart} onAdd={addToCart} showCart={showCart} setShowCart={setShowCart} updateCartQty={updateCartQty} removeFromCart={removeFromCart} submitOrder={submitOrder} announcements={data.announcements} member={member}/>}
+      {tab==="catalog"&&<CatalogTab products={data.products} categories={data.categories} cart={cart} onAdd={addToCart} showCart={showCart} setShowCart={setShowCart} updateCartQty={updateCartQty} removeFromCart={removeFromCart} submitOrder={submitOrder} announcements={data.announcements} member={member} autoCancelHours={autoCancelHours}/>}
       {tab==="wishlist"&&<WishlistTab wishes={myWishes} onAddWish={addWish} onDeleteWish={deleteWish} onAddToCart={addToCart} setTab={setTab}/>}
       {tab==="orders"&&<OrdersTab orders={myOrders}/>}
       {tab==="shipments"&&<ShipmentsTab orders={myOrders} shopeeUrl={shopeeUrl}/>}

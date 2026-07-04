@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { C } from "../theme";
 import { Card, Btn, Field, Sheet, HR } from "../components/ui";
 import { AnnouncementBar } from "../components/AnnouncementBar";
-import { fmtMoney, sanitize, safePrice, safeQty, secureUid, parseItemName, isImgSrc } from "../utils";
+import { fmtMoney, sanitize, safePrice, safeQty, secureUid, parseItemName, isImgSrc, formatShortDate } from "../utils";
+import { TW_BANKS } from "../constants";
 
 // ─── 商品詳情（單一 SKU；variant.stock=null 代購無限、數字現貨庫存）──────
 function ProductSheet({product,onAdd,onClose}){
@@ -12,6 +13,8 @@ function ProductSheet({product,onAdd,onClose}){
   if(!product)return null;
   const isStock=product.type==="stock";
   const sel=variants.find(v=>v.id===selId);
+  const payType=isStock?"full":(product.payment_type||"full");   // 現貨一律全額
+  const selDeposit=sel?Number(sel.deposit_amount)||0:0;
   const selStock=sel&&sel.stock!=null?Number(sel.stock):null;    // null=無限(代購)
   const maxQty=selStock==null?99:Math.max(0,selStock);
   const q=Math.min(qty,Math.max(1,maxQty));
@@ -36,6 +39,29 @@ function ProductSheet({product,onAdd,onClose}){
         </div>
       ):(
         <div style={{background:C.accentBg,borderRadius:C.rSm,padding:"16px 18px"}}><div style={{fontSize:14,color:C.muted}}>價格洽詢</div></div>
+      )}
+      {/* 付款方式提示（代購才有訂金/貨到；現貨一律全額不顯示） */}
+      {payType==="deposit"&&(selDeposit>0
+        ?<div style={{fontSize:12,color:C.accent,fontWeight:500}}>訂金 NT$ {selDeposit}<span style={{color:C.muted,fontWeight:400,marginLeft:6}}>尾款 NT$ {Math.max(0,(dispPrice||0)-selDeposit)} 取貨時付</span></div>
+        :<div style={{fontSize:12,color:C.muted}}>💰 先付訂金 · 請選擇款式查看訂金金額</div>
+      )}
+      {payType==="cod"&&<div style={{fontSize:12,color:C.accent,fontWeight:500}}>💰 貨到付款</div>}
+      {/* 結單日期 / 預計到貨 */}
+      {(product.deadline||product.expected_arrival)&&(
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {product.deadline&&(
+            <div style={{flex:1,minWidth:130,background:C.bgDeep,borderRadius:C.rSm,padding:"10px 12px",border:`1px solid ${C.borderLight}`}}>
+              <div style={{fontSize:10,color:C.faint,letterSpacing:.5,marginBottom:3,fontWeight:600}}>⏰ 結單日期</div>
+              <div style={{fontSize:13,color:C.text,fontWeight:500}}>{formatShortDate(product.deadline)}</div>
+            </div>
+          )}
+          {product.expected_arrival&&(
+            <div style={{flex:1,minWidth:130,background:C.bgDeep,borderRadius:C.rSm,padding:"10px 12px",border:`1px solid ${C.borderLight}`}}>
+              <div style={{fontSize:10,color:C.faint,letterSpacing:.5,marginBottom:3,fontWeight:600}}>📦 預計到貨</div>
+              <div style={{fontSize:13,color:C.text,fontWeight:500}}>{formatShortDate(product.expected_arrival)}</div>
+            </div>
+          )}
+        </div>
       )}
       {showVariants&&(
         <div>
@@ -65,7 +91,7 @@ function ProductSheet({product,onAdd,onClose}){
       <Btn full disabled={!sel||maxQty<=0} onClick={()=>{
         if(!sel||maxQty<=0)return;
         const n=Math.min(q,maxQty);
-        const ci={id:`v_${sel.id}`,name:`${sanitize(product.name)}${sel.spec?` / ${sel.spec}`:""}`,product_name:sanitize(product.name),spec:sel.spec||"",price:safePrice(sel.price),image:product.image||"",variant_id:sel.id,category:isStock?"現貨":sanitize(product.category?.name||"")};
+        const ci={id:`v_${sel.id}`,name:`${sanitize(product.name)}${sel.spec?` / ${sel.spec}`:""}`,product_name:sanitize(product.name),spec:sel.spec||"",price:safePrice(sel.price),image:product.image||"",variant_id:sel.id,category:isStock?"現貨":sanitize(product.category?.name||""),payment_type:payType,deposit_amount:selDeposit,cost:Number(sel.cost)||0};
         for(let i=0;i<n;i++)onAdd(ci);
         onClose();
       }}>{!sel?"請選擇規格":maxQty<=0?"售完":"加入購物車"}</Btn>
@@ -97,7 +123,7 @@ function ProductCard({p,idx,qtyInCart,onOpen}){
   );
 }
 
-export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,updateCartQty,removeFromCart,submitOrder,announcements,member}){
+export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,updateCartQty,removeFromCart,submitOrder,announcements,member,autoCancelHours=36}){
   const [activeCat,setActiveCat]=useState("all");
   const [search,setSearch]=useState("");
   const [selected,setSelected]=useState(null);
@@ -106,6 +132,7 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
   const [mPrice,setMPrice]=useState("");
   const [payAmount,setPayAmount]=useState("");
   const [payLast5,setPayLast5]=useState("");
+  const [payBank,setPayBank]=useState("");
   const [payErr,setPayErr]=useState("");
   // 收件資訊（預帶會員資料，可針對這張訂單修改）
   const [ship,setShip]=useState({recipient_name:"",recipient_phone:"",recipient_store:""});
@@ -125,19 +152,18 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
     if(!ship.recipient_store.trim()){ setPayErr("請填 7-11 取件門市"); return; }
     const amt=Number(payAmount)||0;
     const last5=payLast5||"";
-    if(amt>0 && last5.length!==5){ setPayErr("請填寫匯款帳號後 5 碼"); return; }
-    if(last5 && amt<=0){ setPayErr("請填寫匯款金額"); return; }
-    submitOrder({ payAmount: amt, payLast5: last5, ship });
-    setPayAmount(""); setPayLast5(""); setPayErr("");
+    // 匯款資訊改必填（銀行/金額/末5碼三者皆須填）
+    if(!payBank){ setPayErr("請選擇匯款銀行"); return; }
+    if(amt<=0){ setPayErr("請填寫匯款金額"); return; }
+    if(last5.length!==5){ setPayErr("請填寫完整匯款帳號末 5 碼"); return; }
+    submitOrder({ payAmount: amt, payLast5: last5, payBank, ship });
+    setPayAmount(""); setPayLast5(""); setPayBank(""); setPayErr("");
   };
 
-  // 匯款金額與末5碼：要嘛都填、要嘛都空；只填一個 → 另一個顯示錯誤
-  const amtFilled = payAmount !== "";
-  const last5Filled = payLast5.length > 0;
-  const amtErr = (payAmount!=="" && Number(payAmount)<=0) ? "金額須大於 0"
-               : (!amtFilled && last5Filled) ? "請填寫匯款金額" : "";
-  const last5Err = (payLast5.length>0 && payLast5.length<5) ? "請填完整 5 碼"
-                 : (payLast5.length===0 && amtFilled) ? "請填寫匯款帳號末 5 碼" : "";
+  // 匯款資訊必填：空欄用 accent 邊框提示、輸入不合法才顯示紅字
+  const amtErr   = (payAmount!=="" && Number(payAmount)<=0) ? "金額須大於 0" : "";
+  const last5Err = (payLast5.length>0 && payLast5.length<5) ? "請填完整 5 碼" : "";
+  const bd = (err,empty) => err ? C.red : (empty ? C.accent : C.border);   // 邊框色
 
   const inCart=id=>cart.find(c=>c.id===id);
   const active=(products||[]).filter(p=>p.status==="on");
@@ -247,10 +273,35 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
                   {i<cart.length-1&&<HR/>}
                 </div>
               ))}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 0",borderTop:`1px solid ${C.border}`,marginTop:8}}>
-                <div style={{fontSize:13,color:C.muted}}>{cart.length} 項商品</div>
-                <div style={{fontSize:20,fontWeight:700,color:C.text}}>{fmtMoney(cart.reduce((s,c)=>s+safePrice(c.price)*safeQty(c.qty),0))}</div>
-              </div>
+              {/* 金額明細（依各項付款方式拆：現在應付 / 之後付） */}
+              {(()=>{
+                const subtotal=cart.reduce((s,c)=>s+safePrice(c.price)*safeQty(c.qty),0);
+                let depositSum=0,fullPaySum=0,codSum=0,remainSum=0;
+                cart.forEach(c=>{
+                  const pt=c.payment_type||"full";
+                  const total=safePrice(c.price)*safeQty(c.qty);
+                  if(pt==="deposit"){
+                    const dep=Math.min((Number(c.deposit_amount)||0)*safeQty(c.qty),total);
+                    depositSum+=dep; remainSum+=Math.max(0,total-dep);
+                  } else if(pt==="cod"){ codSum+=total; }
+                  else { fullPaySum+=total; }
+                });
+                const payNow=depositSum+fullPaySum, payLater=remainSum+codSum;
+                return(
+                  <div style={{background:C.bgDeep,borderRadius:C.rSm,padding:"14px 16px",marginBottom:12,marginTop:8,border:`1px solid ${C.border}`}}>
+                    <div style={{fontSize:11,color:C.muted,marginBottom:10,letterSpacing:.5,fontWeight:600}}>金額明細</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.textMid}}>商品小計</span><span style={{color:C.text}}>{fmtMoney(subtotal)}</span></div>
+                      {depositSum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.textMid}}>訂金(現在付)</span><span style={{color:C.accent,fontWeight:600}}>{fmtMoney(depositSum)}</span></div>}
+                      {fullPaySum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.textMid}}>全款(現在付)</span><span style={{color:C.accent,fontWeight:600}}>{fmtMoney(fullPaySum)}</span></div>}
+                      {remainSum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.muted}}><span>尾款(取貨時付)</span><span>{fmtMoney(remainSum)}</span></div>}
+                      {codSum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.muted}}><span>貨到付款</span><span>{fmtMoney(codSum)}</span></div>}
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0 0",borderTop:`1px solid ${C.border}`,marginTop:6}}><span style={{fontSize:14,fontWeight:600,color:C.text}}>現在應付</span><span style={{fontSize:20,fontWeight:700,color:C.accent}}>{fmtMoney(payNow)}</span></div>
+                      {payLater>0&&<div style={{fontSize:10,color:C.muted,textAlign:"right",lineHeight:1.5}}>尾款 {fmtMoney(payLater)} 於商品到貨時付</div>}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 收件資訊（預帶會員資料，可修改此單） */}
               <div style={{background:C.bgDeep,borderRadius:C.rSm,padding:"14px 16px",marginBottom:12,border:`1px solid ${C.border}`}}>
@@ -275,27 +326,35 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
                 </div>
               </div>
 
-              {/* 付款資訊輸入 */}
+              {/* 付款資訊輸入（必填） */}
               <div style={{background:C.bgDeep,borderRadius:C.rSm,padding:"14px 16px",marginBottom:12,border:`1px solid ${C.border}`}}>
-                <div style={{fontSize:11,color:C.muted,marginBottom:10,letterSpacing:.5,fontWeight:600}}>💰 匯款資訊(訂金或全額)</div>
+                <div style={{fontSize:11,color:C.muted,marginBottom:10,letterSpacing:.5,fontWeight:600}}>💰 匯款資訊 <span style={{color:C.accent,fontWeight:400}}>(必填)</span></div>
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   <div>
-                    <label style={{fontSize:11,color:C.textMid,display:"block",marginBottom:4}}>匯款金額 NT$</label>
+                    <label style={{fontSize:11,color:C.textMid,display:"block",marginBottom:4}}>付款銀行 *</label>
+                    <select value={payBank} onChange={e=>setPayBank(e.target.value)}
+                      style={{width:"100%",padding:"9px 12px",border:`1px solid ${bd("",!payBank)}`,borderRadius:8,fontSize:14,boxSizing:"border-box",background:"#fff",color:payBank?C.text:C.muted,cursor:"pointer"}}>
+                      <option value="">請選擇銀行</option>
+                      {TW_BANKS.map(b=><option key={b.code} value={`${b.code} ${b.name}`}>{b.code} {b.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{fontSize:11,color:C.textMid,display:"block",marginBottom:4}}>匯款金額 NT$ *</label>
                     <input type="number" inputMode="numeric" value={payAmount} onChange={e=>setPayAmount(e.target.value)}
                       onWheel={e=>e.currentTarget.blur()}
                       placeholder="例如:500"
-                      style={{width:"100%",padding:"9px 12px",border:`1px solid ${amtErr?C.red:C.border}`,borderRadius:8,fontSize:14,boxSizing:"border-box",background:"#fff",color:C.text}}/>
+                      style={{width:"100%",padding:"9px 12px",border:`1px solid ${bd(amtErr,payAmount==="")}`,borderRadius:8,fontSize:14,boxSizing:"border-box",background:"#fff",color:C.text}}/>
                     {amtErr&&<div style={{fontSize:11,color:C.red,marginTop:3}}>{amtErr}</div>}
                   </div>
                   <div>
-                    <label style={{fontSize:11,color:C.textMid,display:"block",marginBottom:4}}>匯款帳號末 5 碼</label>
+                    <label style={{fontSize:11,color:C.textMid,display:"block",marginBottom:4}}>匯款帳號末 5 碼 *</label>
                     <input type="text" inputMode="numeric" maxLength={5} value={payLast5} onChange={e=>setPayLast5(e.target.value.replace(/\D/g,"").slice(0,5))}
                       placeholder="例如:12345"
-                      style={{width:"100%",padding:"9px 12px",border:`1px solid ${last5Err?C.red:C.border}`,borderRadius:8,fontSize:14,boxSizing:"border-box",background:"#fff",color:C.text,letterSpacing:2}}/>
+                      style={{width:"100%",padding:"9px 12px",border:`1px solid ${bd(last5Err,payLast5.length===0)}`,borderRadius:8,fontSize:14,boxSizing:"border-box",background:"#fff",color:C.text,letterSpacing:2}}/>
                     {last5Err&&<div style={{fontSize:11,color:C.red,marginTop:3}}>{last5Err}</div>}
                   </div>
-                  <div style={{fontSize:10,color:C.faint,lineHeight:1.6,padding:"4px 2px"}}>
-                    填寫後業者較快核對,可先匯訂金或不填(送出後再補)
+                  <div style={{fontSize:10,color:C.accent,lineHeight:1.6,background:C.accentBg,borderRadius:6,padding:"8px 10px"}}>
+                    ⚠️ 匯款資訊為必填。下單後 {autoCancelHours} 小時內業者未確認，系統將自動取消訂單。
                   </div>
                 </div>
               </div>

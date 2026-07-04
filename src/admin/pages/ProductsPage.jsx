@@ -43,7 +43,7 @@ export function ProductsPage(){
     load();
   };
   const saveItem = async it => {
-    const { error } = await supabase.from("products").update({ name: it.name, image: it.image, type: it.type, category_id: it.category_id || null, status: it.status, updated_at: new Date().toISOString() }).eq("id", it.id);
+    const { error } = await supabase.from("products").update({ name: it.name, image: it.image, type: it.type, category_id: it.category_id || null, status: it.status, payment_type: it.type === "stock" ? "full" : (it.payment_type || "full"), deadline: it.deadline || null, expected_arrival: it.expected_arrival || null, updated_at: new Date().toISOString() }).eq("id", it.id);
     if (error) alert(error.message); else { flash("已儲存 ✅"); setItem(it.id, { _saved: it.status }); }
   };
   // 上傳圖片：傳到 product-images，成功即寫回 DB（image 欄），前台以 URL 顯示
@@ -70,7 +70,7 @@ export function ProductsPage(){
   const saveVar = async v => {
     const stock = (v.stock === "" || v.stock == null) ? null : Number(v.stock);
     const status = stock != null && stock <= 0 ? "sold_out" : "on";
-    const { error } = await supabase.from("product_variants").update({ spec: v.spec || "", price: Number(v.price) || 0, stock, status, updated_at: new Date().toISOString() }).eq("id", v.id);
+    const { error } = await supabase.from("product_variants").update({ spec: v.spec || "", price: Number(v.price) || 0, stock, deposit_amount: Number(v.deposit_amount) || 0, cost: Number(v.cost) || 0, status, updated_at: new Date().toISOString() }).eq("id", v.id);
     if (error) alert(error.message); else { flash("已儲存 ✅"); setVar(v.product_id, v.id, { status }); }
   };
 
@@ -131,9 +131,24 @@ export function ProductsPage(){
               <button onClick={() => saveItem(it)} style={btn(C.accent, "#fff")}>儲存</button>
               {it._saved === "off" && <button onClick={() => delItem(it.id)} style={btn(C.redBg, C.red)}>刪除</button>}
             </div>
+            {/* 代購專屬：付款方式 + 結單/到貨日期（現貨一律全額、無代購日期） */}
+            {!isStock && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap", fontSize: 12, color: C.muted }}>
+                <span>付款</span>
+                <select value={it.payment_type || "full"} onChange={e => setItem(it.id, { payment_type: e.target.value })} style={inp}>
+                  <option value="full">全額</option>
+                  <option value="deposit">訂金</option>
+                  <option value="cod">貨到付款</option>
+                </select>
+                <span>結單日</span>
+                <input type="date" value={it.deadline || ""} onChange={e => setItem(it.id, { deadline: e.target.value })} style={inp} />
+                <span>到貨日</span>
+                <input type="date" value={it.expected_arrival || ""} onChange={e => setItem(it.id, { expected_arrival: e.target.value })} style={inp} />
+              </div>
+            )}
             {/* 規格 */}
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr><th style={th}>規格（空=無規格）</th><th style={th}>售價</th><th style={th}>庫存（空=代購無限）</th><th style={th}>狀態</th><th style={th}></th></tr></thead>
+              <thead><tr><th style={th}>規格（空=無規格）</th><th style={th}>售價</th><th style={th}>庫存（空=代購無限）</th><th style={th}>訂金</th><th style={th}>成本</th><th style={th}>狀態</th><th style={th}></th></tr></thead>
               <tbody>
                 {it.variants.map(v => {
                   const s = (v.stock === "" || v.stock == null) ? null : Number(v.stock);
@@ -142,6 +157,8 @@ export function ProductsPage(){
                     <td style={td}><input value={v.spec || ""} onChange={e => setVar(it.id, v.id, { spec: e.target.value })} style={{ ...inp, width: "100%" }} placeholder="紅色…" /></td>
                     <td style={td}><input type="number" value={v.price} onChange={e => setVar(it.id, v.id, { price: e.target.value })} style={{ ...inp, width: 90 }} /></td>
                     <td style={td}><input type="number" value={v.stock == null ? "" : v.stock} onChange={e => setVar(it.id, v.id, { stock: e.target.value })} style={{ ...inp, width: 90 }} placeholder="無限" /></td>
+                    <td style={td}><input type="number" value={v.deposit_amount == null ? "" : v.deposit_amount} onChange={e => setVar(it.id, v.id, { deposit_amount: e.target.value })} style={{ ...inp, width: 76 }} placeholder="0" title="訂金（付款方式=訂金時用）" /></td>
+                    <td style={td}><input type="number" value={v.cost == null ? "" : v.cost} onChange={e => setVar(it.id, v.id, { cost: e.target.value })} style={{ ...inp, width: 76 }} placeholder="0" title="成本（算利潤用）" /></td>
                     <td style={{ ...td, color: s == null ? C.muted : (s <= 0 ? C.red : C.green) }}>{s == null ? "代購" : (s <= 0 ? "售完" : "販售中")}</td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       <button onClick={() => saveVar(v)} style={{ ...btn(C.accentBg, C.accent), marginRight: 6 }}>儲存</button>
