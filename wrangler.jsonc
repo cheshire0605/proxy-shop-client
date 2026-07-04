@@ -1,0 +1,10 @@
+{
+  // Cloudflare 靜態網站部署設定（Vite 打包的 SPA）
+  "name": "proxy-shop-client",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./dist",
+    // SPA：找不到的路徑一律回 index.html，讓 react-router 接手（/admin 直接開也不會 404）
+    "not_found_handling": "single-page-application"
+  }
+}
