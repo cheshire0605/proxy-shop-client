@@ -94,7 +94,7 @@ export function OrdersTab({orders}){
                     {items.map((it,idx)=>(
                       <div key={idx} style={{display:"flex",alignItems:"center",gap:10}}>
                         <div style={{width:36,height:36,borderRadius:8,background:C.bgDeep,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,overflow:"hidden"}}>
-                          {isImgSrc(it.image)?<img src={it.image} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:it.image||"🛒"}
+                          {isImgSrc(it.image)?<img src={it.image} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:9,color:C.faint}}>no image</span>}
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           {(()=>{const {mainName,variants}=parseItemName(it.name);return(<>

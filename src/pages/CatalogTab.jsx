@@ -26,7 +26,7 @@ function ProductSheet({product,onAdd,onClose}){
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18}}>
       <div style={{background:C.bgDeep,aspectRatio:"4/3",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:18,overflow:"hidden",margin:"0 -22px"}}>
-        {isImgSrc(product.image)?<img src={product.image} alt={product.name} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:72}}>{product.image||"🛒"}</span>}
+        {isImgSrc(product.image)?<img src={product.image} alt={product.name} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:14,color:C.faint,letterSpacing:.5}}>no image</span>}
       </div>
       <div>
         <div style={{fontSize:11,color:isStock?C.green:C.muted,letterSpacing:.5,marginBottom:4,fontWeight:isStock?600:400}}>{isStock?"現貨":sanitize(product.category?.name||"")}</div>
@@ -110,7 +110,7 @@ function ProductCard({p,idx,qtyInCart,onOpen}){
   return(
     <div className="fadeUp" style={{animationDelay:`${idx*.03}s`,background:C.bgCard,borderRadius:16,overflow:"hidden",cursor:"pointer",border:`1px solid ${C.borderLight}`,boxShadow:C.shadow,opacity:soldOut?.6:1}} onClick={onOpen}>
       <div style={{background:C.bgDeep,aspectRatio:"1/1",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
-        {isImgSrc(p.image)?<img src={p.image} alt={p.name} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:36}}>{p.image||"🛒"}</span>}
+        {isImgSrc(p.image)?<img src={p.image} alt={p.name} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>:<span style={{fontSize:11,color:C.faint,letterSpacing:.3}}>no image</span>}
         {isStock&&<span style={{position:"absolute",top:8,left:8,background:soldOut?C.muted:C.green,color:"#fff",fontSize:9,padding:"2px 7px",borderRadius:99,fontWeight:600,letterSpacing:.3}}>{soldOut?"售完":"現貨"}</span>}
         {qtyInCart&&<span style={{position:"absolute",top:8,right:8,background:C.accent,color:"#fff",fontSize:10,width:20,height:20,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{qtyInCart}</span>}
       </div>
@@ -175,6 +175,7 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
 
   return(
     <div style={{padding:"16px 16px 100px",display:"flex",flexDirection:"column",gap:16}}>
+      {!showCart && <>
       {/* 公告 */}
       <AnnouncementBar announcements={announcements}/>
 
@@ -232,15 +233,20 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
           </div>
         }
       </Card>
+      </>}
 
       {/* 商品詳情 Sheet */}
       <Sheet open={!!selected} onClose={()=>setSelected(null)} title={selected?sanitize(selected.name):""}>
         {selected&&<ProductSheet product={selected} onAdd={onAdd} onClose={()=>setSelected(null)}/>}
       </Sheet>
 
-      {/* 購物車 Sheet */}
-      <Sheet open={showCart} onClose={()=>setShowCart(false)} title="購物車">
+      {/* 購物車整頁（取代目錄內容） */}
+      {showCart && (
         <div style={{display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+            <button onClick={()=>setShowCart(false)} style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${C.border}`,background:C.bgCard,fontSize:18,cursor:"pointer",color:C.textMid,flexShrink:0}}>←</button>
+            <h2 style={{fontSize:18,fontWeight:700,margin:0}}>購物車</h2>
+          </div>
           {cart.length===0
             ?<div style={{textAlign:"center",padding:"40px 0",color:C.faint}}>購物車是空的</div>
             :<>
@@ -250,7 +256,7 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
                     <div style={{width:48,height:48,background:C.bgDeep,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0,overflow:"hidden"}}>
                       {isImgSrc(item.image)
                         ?<img src={item.image} style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>e.target.style.display="none"}/>
-                        :item.image||"🛒"}
+                        :<span style={{fontSize:9,color:C.faint}}>no image</span>}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
                       {(()=>{const {mainName,variants}=parseItemName(item.name);return(<>
@@ -292,11 +298,11 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
                     <div style={{fontSize:11,color:C.muted,marginBottom:10,letterSpacing:.5,fontWeight:600}}>金額明細</div>
                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
                       <div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.textMid}}>商品小計</span><span style={{color:C.text}}>{fmtMoney(subtotal)}</span></div>
-                      {depositSum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.textMid}}>訂金(現在付)</span><span style={{color:C.accent,fontWeight:600}}>{fmtMoney(depositSum)}</span></div>}
-                      {fullPaySum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.textMid}}>全款(現在付)</span><span style={{color:C.accent,fontWeight:600}}>{fmtMoney(fullPaySum)}</span></div>}
-                      {remainSum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.muted}}><span>尾款(取貨時付)</span><span>{fmtMoney(remainSum)}</span></div>}
+                      {depositSum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.textMid}}>訂金</span><span style={{color:C.accent,fontWeight:600}}>{fmtMoney(depositSum)}</span></div>}
+                      {fullPaySum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:13}}><span style={{color:C.textMid}}>全款</span><span style={{color:C.accent,fontWeight:600}}>{fmtMoney(fullPaySum)}</span></div>}
+                      {remainSum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.muted}}><span>尾款</span><span>{fmtMoney(remainSum)}</span></div>}
                       {codSum>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:C.muted}}><span>貨到付款</span><span>{fmtMoney(codSum)}</span></div>}
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0 0",borderTop:`1px solid ${C.border}`,marginTop:6}}><span style={{fontSize:14,fontWeight:600,color:C.text}}>現在應付</span><span style={{fontSize:20,fontWeight:700,color:C.accent}}>{fmtMoney(payNow)}</span></div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0 0",borderTop:`1px solid ${C.border}`,marginTop:6}}><span style={{fontSize:14,fontWeight:600,color:C.text}}>應付</span><span style={{fontSize:20,fontWeight:700,color:C.accent}}>{fmtMoney(payNow)}</span></div>
                       {payLater>0&&<div style={{fontSize:10,color:C.muted,textAlign:"right",lineHeight:1.5}}>尾款 {fmtMoney(payLater)} 於商品到貨時付</div>}
                     </div>
                   </div>
@@ -365,7 +371,7 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
             </>
           }
         </div>
-      </Sheet>
+      )}
     </div>
   );
 }

@@ -64,7 +64,7 @@ export function ShipmentsTab({orders, shopeeUrl}){
                     {isImgSrc(it.image)?(
                       <img src={it.image} alt="" style={{width:42,height:42,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
                     ):(
-                      <div style={{width:42,height:42,borderRadius:8,background:C.bgDeep,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🛒</div>
+                      <div style={{width:42,height:42,borderRadius:8,background:C.bgDeep,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:9,color:C.faint}}>no image</span></div>
                     )}
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,color:C.text,fontWeight:500,lineHeight:1.3}}>{it.name}</div>

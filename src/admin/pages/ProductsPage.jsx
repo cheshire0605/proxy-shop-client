@@ -21,6 +21,7 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [imgErr, setImgErr] = useState("");
 
   const isStock = form.type === "stock";
   const set = (k,v) => setForm(f => ({ ...f, [k]: v }));
@@ -32,10 +33,10 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
 
   const handleUpload = async (file) => {
     if (!file) return;
-    if (file.size > 2*1024*1024) { setErr("圖片請小於 2MB"); return; }
-    setUploading(true); setErr("");
+    if (file.size > 2*1024*1024) { setImgErr(`圖片 ${(file.size/1024/1024).toFixed(1)}MB 超過上限，請換 2MB 以內的檔案`); return; }
+    setUploading(true); setImgErr("");
     try { const url = await uploadImage(file); set("image", url); }
-    catch (e) { setErr("上傳失敗：" + (e.message||e)); }
+    catch (e) { setImgErr("上傳失敗：" + (e.message||e)); }
     finally { setUploading(false); }
   };
 
@@ -144,18 +145,20 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
       {/* 商品圖片 */}
       <div style={sec}>
         <div style={h}>商品圖片</div>
-        <div style={{display:"flex",gap:12,alignItems:"center"}}>
-          <label style={{flex:1,border:`2px dashed ${C.border}`,borderRadius:12,padding:"18px",textAlign:"center",cursor:uploading?"wait":"pointer",background:C.bgDeep}}>
-            <div style={{fontSize:22}}>{uploading?"⏳":"📷"}</div>
-            <div style={{fontSize:12,color:C.muted,marginTop:4}}>{uploading?"上傳中…":"點擊選擇圖片"}</div>
-            <div style={{fontSize:10,color:C.faint}}>JPG / PNG，最大 2MB</div>
+        <div style={{display:"flex",gap:12,alignItems:"stretch"}}>
+          {/* 顯示圖片（大，左） */}
+          <div style={{flex:1,minHeight:150,borderRadius:12,background:C.bgDeep,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+            {isImgSrc(form.image)?<img src={form.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:13,color:C.faint}}>no image</span>}
+          </div>
+          {/* 選擇圖片（小，右） */}
+          <label style={{width:96,flexShrink:0,border:`2px dashed ${C.border}`,borderRadius:12,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"10px 6px",textAlign:"center",cursor:uploading?"wait":"pointer",background:C.bgDeep}}>
+            <div style={{fontSize:20}}>{uploading?"⏳":"📷"}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:4}}>{uploading?"上傳中…":"選擇圖片"}</div>
+            <div style={{fontSize:9,color:C.faint,marginTop:2}}>最大 2MB</div>
             <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];e.target.value="";handleUpload(f);}}/>
           </label>
-          <div style={{width:80,height:80,borderRadius:12,background:C.bgDeep,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,fontSize:34}}>
-            {isImgSrc(form.image)?<img src={form.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(form.image||"🛒")}
-          </div>
         </div>
-        <input style={{...inp,marginTop:8}} value={form.image} onChange={e=>set("image",e.target.value)} placeholder="或填 emoji / 圖片網址"/>
+        {imgErr && <div style={{fontSize:12,color:C.red,background:C.redBg,padding:"7px 10px",borderRadius:8,marginTop:8}}>{imgErr}</div>}
       </div>
 
       {/* 款式設定 */}
@@ -243,7 +246,7 @@ export function ProductsPage(){
   const flash = m => { setMsg(m); setTimeout(() => setMsg(""), 1500); };
 
   const addItem = async () => {
-    const { data, error } = await supabase.from("products").insert([{ type:"proxy", name:"新商品", image:"🛒", status:"off", rate:globalRate }]).select().single();
+    const { data, error } = await supabase.from("products").insert([{ type:"proxy", name:"新商品", image:"", status:"off", rate:globalRate }]).select().single();
     if (error) { alert(error.message); return; }
     await supabase.from("product_variants").insert([{ product_id:data.id, spec:"", price:0, stock:null }]);
     const { data:full } = await supabase.from("products").select("*, variants:product_variants(*)").eq("id", data.id).single();
@@ -288,7 +291,7 @@ export function ProductsPage(){
               const priceLabel = prices.length ? (Math.min(...prices)===Math.max(...prices) ? `NT$${Math.min(...prices)}` : `NT$${Math.min(...prices)}~${Math.max(...prices)}`) : "—";
               return (
               <tr key={it.id} style={{ borderBottom:`1px solid ${C.borderLight}` }}>
-                <td style={{ padding:"8px" }}><div style={{ width:40,height:40,borderRadius:8,background:C.bgDeep,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",fontSize:20 }}>{isImgSrc(it.image)?<img src={it.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(it.image||"🛒")}</div></td>
+                <td style={{ padding:"8px" }}><div style={{ width:40,height:40,borderRadius:8,background:C.bgDeep,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",fontSize:20 }}>{isImgSrc(it.image)?<img src={it.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:9,color:C.faint}}>no image</span>}</div></td>
                 <td style={{ padding:"8px", fontSize:13, fontWeight:500 }}>{it.name}</td>
                 <td style={{ padding:"8px", fontSize:12, color:it.type==="stock"?C.green:C.muted }}>{it.type==="stock"?"現貨":"代購"}</td>
                 <td style={{ padding:"8px", fontSize:12, color:C.muted }}>{cats.find(c=>c.id===it.category_id)?.name || "—"}</td>
