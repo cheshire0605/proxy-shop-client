@@ -5,11 +5,20 @@ import { C } from "../theme";
 
 const NAV = [
   { to: "/admin/orders",       label: "訂單管理", icon: "📋" },
+  { to: "/admin/review",       label: "待審核",   icon: "📝" },
   { to: "/admin/distribution", label: "配貨採買", icon: "🛒" },
-  { to: "/admin/products",     label: "商品管理", icon: "🏪" },
+  { to: "/admin/customers",    label: "客人",     icon: "👤" },
+  { to: "/admin/products",     label: "賣場",     icon: "🏪" },
   { to: "/admin/categories",   label: "分類管理", icon: "🗂️" },
+  { to: "/admin/announcements", label: "公告管理", icon: "📢" },
+  { to: "/admin/wishlist",     label: "許願清單", icon: "⭐" },
+  { to: "/admin/instock",      label: "現貨/庫存", icon: "📦" },
   { to: "/admin/stocklog",     label: "庫存異動", icon: "📊" },
+  { to: "/admin/revenue",      label: "營收報表", icon: "📈" },
   { to: "/admin/export",       label: "匯出報表", icon: "📄" },
+  { to: "/admin/archive",      label: "封存區",   icon: "📦" },
+  { to: "/admin/settings",     label: "帳號設定", icon: "⚙️" },
+  { to: "/admin/auditlog",     label: "操作日誌", icon: "🛡️" },
 ];
 
 export function AdminLayout(){

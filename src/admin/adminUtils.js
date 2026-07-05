@@ -31,6 +31,18 @@ export const SHIPPING_LABEL = { pending:"未處理", preparing:"備貨中", ship
 export const PURCHASE_LABEL = { unpurchased:"未採買", partial:"部分採買", purchased:"已採買", out_of_stock:"缺貨", partial_out_of_stock:"部分缺貨", cancelled:"已取消" };
 export const ORDER_LABEL = { pending_review:"待審核", active:"進行中", cancelled:"已取消" };
 
+// 訂單流水線階段推導（訂單頁 / 統計卡共用）：待審核→待採買→已採買→已寄出→已到台/已取消
+export const orderStage = (o) => {
+  if (o.status === "cancelled") return "cancelled";
+  if (o.status === "pending_review") return "pending_review";
+  const ship = o.shipping_status || "pending";
+  if (ship === "shipped") return "shipped";
+  if (ship === "arrived" || ship === "completed") return "arrived";
+  const items = o.items || [];
+  const done = items.length > 0 && items.every(it => it.allocated_qty != null ? it.allocated_qty >= it.qty : it.purchase_status === "purchased");
+  return done ? "purchased" : "to_purchase";
+};
+
 // ─── CSV ──────────────────────────────────────────────────────
 export function toCSV(rows, headers){
   const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;

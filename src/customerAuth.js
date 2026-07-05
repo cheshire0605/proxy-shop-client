@@ -10,33 +10,27 @@ export async function ensureCustomerSession(lineProfile){
   const { data: { session } } = await supabase.auth.getSession();
   if (session) return session.user.id;
 
+  // ── 真 LINE 登入：把 LINE idToken 交給 Edge Function 驗證 → 換 Supabase session ──
+  // Edge Function 用 LINE 公鑰驗簽（非對稱），確認身分後回傳單次 token_hash，
+  // 前端用 verifyOtp 換到正式 session；身分識別一律用 Supabase 的 auth.uid()。
+  if (lineProfile?.idToken) {
+    const { data, error } = await supabase.functions.invoke("line-auth", { body: { idToken: lineProfile.idToken } });
+    if (error) throw new Error("LINE 驗證失敗：" + (error.message || error));
+    if (!data?.token_hash) throw new Error("LINE 驗證回應異常：" + (data?.error || "無 token"));
+    const { error: e2 } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: data.token_hash });
+    if (e2) throw e2;
+    const { data: { session: s } } = await supabase.auth.getSession();
+    return s.user.id;
+  }
+
+  // ── 訪客（僅本地開發）：匿名登入產生假身分（需開 Anonymous sign-ins）──
   if (DEV_PREVIEW) {
-    // 本地開發：匿名登入產生一個「假客人」身分
-    // （需先在 Supabase → Authentication → Providers 開啟 Anonymous sign-ins）
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error) throw error;
     return data.user.id;
   }
 
-  // ══════════════════════════════════════════════════════════════
-  // 【要串接 LINE 的地方 — 待實作】
-  // 正式環境流程：
-  //   1) 客人用 LINE 登入後，用 liff.getIDToken() 取得 idToken
-  //   2) 呼叫 Edge Function（例如 line-auth）把 idToken 交給後端驗證
-  //   3) 後端（service key）建立/登入對應的 Supabase 使用者，回傳 session
-  //   4) 前端 supabase.auth.setSession(session)，回傳 session.user.id
-  // 範例（待 Edge Function 完成後啟用）：
-  //   const { data, error } = await supabase.functions.invoke("line-auth", {
-  //     body: { idToken: lineProfile?.idToken },
-  //   });
-  //   if (error) throw error;
-  //   await supabase.auth.setSession(data.session);
-  //   return data.session.user.id;
-  //
-  // 註：屆時 members 可另存「真正的 LINE userId」欄位，
-  //     但『身分識別』一律用 Supabase 的 user.id（auth.uid()）。
-  // ══════════════════════════════════════════════════════════════
-  throw new Error("LINE 登入尚未串接後端 session（見 src/customerAuth.js 待實作區塊）");
+  throw new Error("請用 LINE 登入");
 }
 
 // 【開發用｜LINE 串接的替身】以「假 LINE 帳號」登入。

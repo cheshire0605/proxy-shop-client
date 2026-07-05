@@ -145,6 +145,22 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
     }));
   },[member]);
 
+  // 深連結：網址帶 ?product=ID 自動打開該商品詳情（用完清掉參數）
+  useEffect(()=>{
+    if(!products||products.length===0)return;
+    try{
+      const pid=new URLSearchParams(window.location.search).get("product");
+      if(!pid)return;
+      const found=products.find(p=>p.id===pid);
+      if(found&&found.status==="on"){
+        setSelected(found);
+        const url=new URL(window.location);
+        url.searchParams.delete("product");
+        window.history.replaceState({},"",url);
+      }
+    }catch(e){ console.warn("URL params error:",e); }
+  },[products]);
+
   const doSubmit=()=>{
     setPayErr("");
     if(!ship.recipient_name.trim()){ setPayErr("請填收件人姓名"); return; }

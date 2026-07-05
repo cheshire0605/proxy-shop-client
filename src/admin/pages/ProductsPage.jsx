@@ -4,6 +4,7 @@ import { C } from "../../theme";
 import { uploadImage } from "../adminUtils";
 import { isImgSrc } from "../../utils";
 import { Modal } from "../ui";
+import { StatsHeader } from "../StatsHeader";
 
 const inp = { width:"100%", padding:"10px 12px", border:`1.5px solid ${C.border}`, borderRadius:10, fontSize:14, boxSizing:"border-box", background:"#fff", color:C.text };
 const lab = { fontSize:11, color:C.textMid, display:"block", marginBottom:5 };
@@ -22,14 +23,16 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [imgErr, setImgErr] = useState("");
+  const [copied, setCopied] = useState(false);
+  const shareLink = `${window.location.origin}/?product=${product.id}`;
+  const doShare = async () => { try { await navigator.clipboard.writeText(shareLink); setCopied(true); setTimeout(()=>setCopied(false),1800); } catch {} };
 
   const isStock = form.type === "stock";
   const set = (k,v) => setForm(f => ({ ...f, [k]: v }));
   const setVar = (id, patch) => setVariants(vs => vs.map(v => v.id===id ? { ...v, ...patch } : v));
   const delVar = (id) => setVariants(vs => vs.filter(v => v.id !== id));
-  // 成本自動 = 日幣 × 匯率（改日幣/匯率時重算；直接改成本＝手動覆寫）
-  const onJpy  = (v,val) => setVar(v.id, { jpy_price: val, cost: Math.round((Number(val)||0)*(Number(v.rate ?? form.rate)||0)) });
-  const onRate = (v,val) => setVar(v.id, { rate: val, cost: Math.round((Number(v.jpy_price)||0)*(Number(val)||0)) });
+  // 成本自動 = 日幣 × 商品匯率（改日幣時重算；直接改成本＝手動覆寫）
+  const onJpy  = (v,val) => setVar(v.id, { jpy_price: val, cost: Math.round((Number(val)||0)*(Number(form.rate)||0)) });
 
   const handleUpload = async (file) => {
     if (!file) return;
@@ -44,7 +47,7 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
     const cost = newVar.costMode==="jpy" ? Math.round((Number(newVar.jpy_price)||0)*(Number(form.rate)||0)) : (Number(newVar.cost)||0);
     setVariants(vs => [...vs, {
       id:`new_${Date.now()}_${vs.length}`, spec:newVar.spec, price:Number(newVar.price)||0,
-      jpy_price: newVar.costMode==="jpy" ? (Number(newVar.jpy_price)||0) : 0, rate: form.rate,
+      jpy_price: newVar.costMode==="jpy" ? (Number(newVar.jpy_price)||0) : 0,
       cost, deposit_amount:0, stock: isStock ? 0 : null, status:"on",
     }]);
     setNewVar({ spec:"", price:"", costMode:"twd", cost:"", jpy_price:"" });
@@ -66,18 +69,24 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
         const { error } = await supabase.from("product_variants").delete().eq("id", rv.id);
         if (error) throw new Error(`規格「${rv.spec||"標準"}」刪除失敗（可能已被下單）`);
       }
-      // 新增/更新規格
+      // 新增/更新規格（成本另存 admin-only 的 variant_costs）
       for (const v of variants) {
         const stock = isStock ? ((v.stock===""||v.stock==null)?0:Number(v.stock)) : null;
         const payload = {
-          product_id:product.id, spec:v.spec||"", price:Number(v.price)||0, jpy_price:Number(v.jpy_price)||0,
-          rate:(v.rate===""||v.rate==null)?null:Number(v.rate), cost:Number(v.cost)||0, deposit_amount:Number(v.deposit_amount)||0,
+          product_id:product.id, spec:v.spec||"", price:Number(v.price)||0, deposit_amount:Number(v.deposit_amount)||0,
           stock, status:(stock!=null&&stock<=0)?"sold_out":"on", updated_at:new Date().toISOString(),
         };
-        const { error } = String(v.id).startsWith("new_")
-          ? await supabase.from("product_variants").insert([payload])
-          : await supabase.from("product_variants").update(payload).eq("id", v.id);
-        if (error) throw error;
+        let vid = v.id;
+        if (String(v.id).startsWith("new_")) {
+          const { data:ins, error } = await supabase.from("product_variants").insert([payload]).select("id").single();
+          if (error) throw error;
+          vid = ins.id;
+        } else {
+          const { error } = await supabase.from("product_variants").update(payload).eq("id", v.id);
+          if (error) throw error;
+        }
+        const { error:ce } = await supabase.from("variant_costs").upsert([{ variant_id:vid, jpy_price:Number(v.jpy_price)||0, cost:Number(v.cost)||0 }], { onConflict:"variant_id" });
+        if (ce) throw ce;
       }
       onSaved();
     } catch (e) { setErr(e.message || String(e)); setSaving(false); }
@@ -92,6 +101,15 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
       <div style={{display:"flex",alignItems:"center",marginBottom:18}}>
         <h2 style={{fontSize:18,fontWeight:700,margin:0}}>編輯商品</h2>
         <button onClick={onClose} style={{marginLeft:"auto",width:32,height:32,borderRadius:"50%",border:"none",background:C.bgDeep,color:C.muted,fontSize:16,cursor:"pointer"}}>✕</button>
+      </div>
+
+      {/* 分享商品連結（深連結 ?product=ID）*/}
+      <div style={{background:C.accentBg,borderRadius:12,padding:"12px 14px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:600,color:C.accent}}>🔗 分享商品連結</div>
+          <div style={{fontSize:11,color:C.muted}}>分享到 LINE / IG / FB，客人點連結直接進購物頁</div>
+        </div>
+        <button onClick={doShare} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>{copied?"已複製 ✓":"分享連結"}</button>
       </div>
 
       {/* 名稱 + 分類 + 類型 + 狀態 */}
@@ -179,8 +197,7 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
                 {isStock
                   ? <div><label style={lab}>庫存</label><input style={inp} type="number" value={v.stock==null?"":v.stock} onChange={e=>setVar(v.id,{stock:e.target.value})} placeholder="0"/></div>
                   : <div><label style={lab}>💰 訂金 NT$</label><input style={inp} type="number" value={v.deposit_amount==null?"":v.deposit_amount} onChange={e=>setVar(v.id,{deposit_amount:e.target.value})} placeholder="0"/></div>}
-                <div><label style={lab}>日幣價格 ¥</label><input style={inp} type="number" value={v.jpy_price==null?"":v.jpy_price} onChange={e=>onJpy(v,e.target.value)} placeholder="0"/></div>
-                <div><label style={lab}>匯率 ¥1＝NT$</label><input style={inp} type="number" value={v.rate==null?"":v.rate} onChange={e=>onRate(v,e.target.value)} placeholder={String(form.rate||0)}/></div>
+                <div><label style={lab}>日幣價格 ¥（× {form.rate||0}）</label><input style={inp} type="number" value={v.jpy_price==null?"":v.jpy_price} onChange={e=>onJpy(v,e.target.value)} placeholder="0"/></div>
                 <div style={{gridColumn:"1 / -1"}}><label style={lab}>成本 NT$（可手動覆寫）</label><input style={{...inp,color:C.accent,fontWeight:600}} type="number" value={v.cost==null?"":v.cost} onChange={e=>setVar(v.id,{cost:e.target.value})}/></div>
               </div>
               {!isStock && Number(v.deposit_amount)>0 && <div style={{fontSize:11,color:C.muted,marginTop:6}}>剩餘 NT${remain} 於取貨時付</div>}
@@ -231,12 +248,14 @@ export function ProductsPage(){
 
   const load = async () => {
     setLoading(true);
-    const [{ data: prods }, { data: categories }, { data: setting }] = await Promise.all([
+    const [{ data: prods }, { data: categories }, { data: setting }, { data: costs }] = await Promise.all([
       supabase.from("products").select("*, variants:product_variants(*)").order("created_at", { ascending: false }),
       supabase.from("categories").select("*").order("sort_order", { ascending: true }),
       supabase.from("settings").select("value").eq("key", "jpy_rate").maybeSingle(),
+      supabase.from("variant_costs").select("*"),   // 成本（admin-only 表）
     ]);
-    setItems((prods || []).map(it => ({ ...it, variants: (it.variants || []).slice().sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||"")) })));
+    const costBy = {}; (costs || []).forEach(c => { costBy[c.variant_id] = c; });
+    setItems((prods || []).map(it => ({ ...it, variants: (it.variants || []).map(v => ({ ...v, jpy_price: costBy[v.id]?.jpy_price || 0, cost: costBy[v.id]?.cost || 0 })).sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||"")) })));
     setCats(categories || []);
     if (setting?.value) setGlobalRate(Number(setting.value) || 0.23);
     setLoading(false);
@@ -259,16 +278,23 @@ export function ProductsPage(){
     if (error) { alert("刪除失敗：此商品可能已有訂單引用，建議維持下架。\n" + error.message); return; }
     load();
   };
+  const toggleStatus = async (it) => {
+    const next = it.status === "on" ? "off" : "on";
+    await supabase.from("products").update({ status: next, updated_at: new Date().toISOString() }).eq("id", it.id);
+    load();
+  };
 
-  const th = { textAlign:"left", padding:"6px 8px", fontSize:11, color:C.muted, fontWeight:600 };
   const filtered = items.filter(it =>
     (!search.trim() || (it.name||"").includes(search)) &&
     (statusFilter==="all" || it.status===statusFilter));
 
   return (
     <div>
+      <h2 style={{ fontSize:20, fontWeight:700, margin:"0 0 16px" }}>賣場</h2>
+      <StatsHeader/>
+
       <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16, flexWrap:"wrap" }}>
-        <h2 style={{ fontSize:18, fontWeight:700, margin:0 }}>商品管理</h2>
+        <h3 style={{ fontSize:16, fontWeight:700, margin:0 }}>賣場管理</h3>
         {msg && <span style={{ fontSize:13, color:C.green }}>{msg}</span>}
         <div style={{ marginLeft:"auto" }} />
         <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{ padding:"8px 14px", border:`1.5px solid ${C.border}`, borderRadius:99, fontSize:13, background:"#fff" }}>
@@ -280,32 +306,39 @@ export function ProductsPage(){
 
       {loading ? <div style={{ color:C.muted, padding:20 }}>載入中…</div> :
        filtered.length === 0 ? <div style={{ color:C.faint, padding:40, textAlign:"center", background:C.surface, borderRadius:C.r }}>沒有商品</div> :
-       <div style={{ background:C.surface, borderRadius:C.r, boxShadow:C.shadow, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead><tr style={{ borderBottom:`1px solid ${C.border}` }}>
-            <th style={th}></th><th style={th}>名稱</th><th style={th}>類型</th><th style={th}>分類</th><th style={th}>款式/售價</th><th style={th}>狀態</th><th style={th}></th>
-          </tr></thead>
-          <tbody>
-            {filtered.map(it => {
-              const prices = (it.variants||[]).map(v=>Number(v.price)||0).filter(x=>x>0);
-              const priceLabel = prices.length ? (Math.min(...prices)===Math.max(...prices) ? `NT$${Math.min(...prices)}` : `NT$${Math.min(...prices)}~${Math.max(...prices)}`) : "—";
-              return (
-              <tr key={it.id} style={{ borderBottom:`1px solid ${C.borderLight}` }}>
-                <td style={{ padding:"8px" }}><div style={{ width:40,height:40,borderRadius:8,background:C.bgDeep,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",fontSize:20 }}>{isImgSrc(it.image)?<img src={it.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:9,color:C.faint}}>no image</span>}</div></td>
-                <td style={{ padding:"8px", fontSize:13, fontWeight:500 }}>{it.name}</td>
-                <td style={{ padding:"8px", fontSize:12, color:it.type==="stock"?C.green:C.muted }}>{it.type==="stock"?"現貨":"代購"}</td>
-                <td style={{ padding:"8px", fontSize:12, color:C.muted }}>{cats.find(c=>c.id===it.category_id)?.name || "—"}</td>
-                <td style={{ padding:"8px", fontSize:12, color:C.textMid }}>{(it.variants||[]).length} 款 · {priceLabel}</td>
-                <td style={{ padding:"8px", fontSize:12 }}><span style={{ color:it.status==="on"?C.green:C.muted }}>{it.status==="on"?"上架中":"下架"}</span></td>
-                <td style={{ padding:"8px", whiteSpace:"nowrap" }}>
-                  <button onClick={()=>setEditing(it)} style={{ ...btn(C.accent,"#fff"), marginRight:6 }}>編輯</button>
-                  {it.status==="off" && <button onClick={()=>delItem(it.id)} style={btn(C.redBg,C.red)}>刪除</button>}
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
+       <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        {filtered.map(it => {
+          const prices = (it.variants||[]).map(v=>Number(v.price)||0).filter(x=>x>0);
+          const priceLabel = prices.length ? (Math.min(...prices)===Math.max(...prices) ? `$${Math.min(...prices)}` : `$${Math.min(...prices)} - $${Math.max(...prices)}`) : "洽詢";
+          const catName = cats.find(c=>c.id===it.category_id)?.name;
+          const on = it.status==="on";
+          const specs = (it.variants||[]).filter(v=>v.spec);
+          return (
+          <div key={it.id} style={{ background:C.surface, borderRadius:C.r, boxShadow:C.shadow, overflow:"hidden" }}>
+            <div style={{ display:"flex", gap:14, padding:16 }}>
+              <div style={{ width:72, height:72, borderRadius:12, background:C.bgDeep, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0 }}>
+                {isImgSrc(it.image)?<img src={it.image} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:10,color:C.faint}}>no image</span>}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:11, color:C.faint }}>{catName || (it.type==="stock"?"現貨":"未分類")}</div>
+                <div style={{ fontSize:15, fontWeight:600, color:C.text, margin:"2px 0" }}>{it.name}</div>
+                <div style={{ fontSize:14, fontWeight:600, color:C.accent }}>{priceLabel}</div>
+                {specs.length>0 && <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:8 }}>
+                  {specs.map(v=><span key={v.id} style={{ fontSize:11, background:C.bgDeep, color:C.textMid, borderRadius:6, padding:"3px 9px" }}>{v.spec}</span>)}
+                </div>}
+              </div>
+              <div style={{ flexShrink:0 }}>
+                <span style={{ background:on?C.greenBg:C.bgDeep, color:on?C.green:C.muted, fontSize:12, fontWeight:600, padding:"4px 10px", borderRadius:99, whiteSpace:"nowrap" }}>{on?"✓ 販售中":"已下架"}</span>
+              </div>
+            </div>
+            <div style={{ display:"flex", borderTop:`1px solid ${C.borderLight}` }}>
+              <button onClick={()=>setEditing(it)} style={{ flex:1, border:"none", borderRight:`1px solid ${C.borderLight}`, background:"transparent", padding:"12px", fontSize:13, color:C.textMid, cursor:"pointer" }}>✏️ 編輯</button>
+              <button onClick={()=>toggleStatus(it)} style={{ flex:1, border:"none", background:"transparent", padding:"12px", fontSize:13, color:C.textMid, cursor:"pointer" }}>{on?"🚫 下架":"✓ 上架"}</button>
+              {!on && <button onClick={()=>delItem(it.id)} style={{ width:56, border:"none", borderLeft:`1px solid ${C.borderLight}`, background:"transparent", padding:"12px", fontSize:15, color:C.red, cursor:"pointer" }}>🗑</button>}
+            </div>
+          </div>
+          );
+        })}
        </div>
       }
 

@@ -4,7 +4,6 @@ import { C } from "./theme";
 import { injectStyles } from "./styles";
 import { sanitize, safePrice, safeQty, secureUid, secureOrderNo, parseItemName, orderItemsToLegacy } from "./utils";
 import { ensureCustomerSession, signInFakeLine } from "./customerAuth";
-import { FakeLineLogin } from "./pages/FakeLineLogin";
 import { FAKE_ACCOUNTS } from "./devFakeAccounts";
 import { Icon } from "./components/Icon";
 import { Toast } from "./components/ui";
@@ -274,7 +273,8 @@ export default function App(){
     if(session===undefined)return;
     if(!session){ setLineUser(null); setData(null); return; }
     const acc=FAKE_ACCOUNTS.find(a=>a.email===session.user.email);
-    setLineUser({ name: acc?.name || (session.user.email?"客人":"訪客"), userId: session.user.id, pictureUrl:"" });
+    const meta=session.user.user_metadata||{};
+    setLineUser({ name: acc?.name || meta.name || (session.user.email?"客人":"訪客"), userId: session.user.id, pictureUrl: meta.picture||"" });
     setData({products:[],categories:[],orders:[],wishlist:[],announcements:[]}); // 初始空；由 MainApp reloadData 一次載入
   },[session]);
 
@@ -290,7 +290,7 @@ export default function App(){
     </div>
   );
   if(session===undefined) return loadingScreen;
-  if(!session) return DEV_PREVIEW ? <FakeLineLogin onPick={onPickFake} onGuest={onGuest}/> : <LineLogin onSuccess={onLineSuccess}/>;
+  if(!session) return <LineLogin onSuccess={onLineSuccess} onPickFake={onPickFake} onGuest={onGuest} showTest={DEV_PREVIEW}/>;
   if(!data) return loadingScreen;
   return<MainApp lineUser={lineUser} data={data} setData={setData}/>;
 }

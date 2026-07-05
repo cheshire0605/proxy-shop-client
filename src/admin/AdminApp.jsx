@@ -5,12 +5,21 @@ import { C } from "../theme";
 import { AdminLogin } from "./pages/AdminLogin";
 import { AdminLayout } from "./AdminLayout";
 import { OrdersPage } from "./pages/OrdersPage";
-import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { DistributionPage } from "./pages/DistributionPage";
 import { ProductsPage } from "./pages/ProductsPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { StockLogPage } from "./pages/StockLogPage";
 import { ExportPage } from "./pages/ExportPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { ArchivePage } from "./pages/ArchivePage";
+import { AnnouncementsPage } from "./pages/AnnouncementsPage";
+import { CustomersPage } from "./pages/CustomersPage";
+import { WishlistPage } from "./pages/WishlistPage";
+import { ReviewPage } from "./pages/ReviewPage";
+import { AuditLogPage } from "./pages/AuditLogPage";
+import { RevenuePage } from "./pages/RevenuePage";
+import { InStockPage } from "./pages/InStockPage";
+import { logAction } from "./auditLog";
 
 export default function AdminApp(){
   const [session, setSession] = useState(undefined); // undefined=載入中
@@ -28,7 +37,7 @@ export default function AdminApp(){
     if (session === undefined) return;
     if (!session) { setIsAdmin(false); return; }
     setIsAdmin(undefined);
-    supabase.rpc("is_admin").then(({ data, error }) => setIsAdmin(!error && data === true));
+    supabase.rpc("is_admin").then(({ data, error }) => { const ok = !error && data === true; setIsAdmin(ok); if (ok) logAction("登入後台", session.user?.email || ""); });
   }, [session]);
 
   const centered = {minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",color:C.muted,background:C.bg};
@@ -40,12 +49,20 @@ export default function AdminApp(){
       <Route element={<AdminLayout/>}>
         <Route index element={<Navigate to="orders" replace/>}/>
         <Route path="orders" element={<OrdersPage/>}/>
-        <Route path="orders/:id" element={<OrderDetailPage/>}/>
         <Route path="distribution" element={<DistributionPage/>}/>
         <Route path="products" element={<ProductsPage/>}/>
         <Route path="categories" element={<CategoriesPage/>}/>
         <Route path="stocklog" element={<StockLogPage/>}/>
         <Route path="export" element={<ExportPage/>}/>
+        <Route path="settings" element={<SettingsPage/>}/>
+        <Route path="archive" element={<ArchivePage/>}/>
+        <Route path="announcements" element={<AnnouncementsPage/>}/>
+        <Route path="customers" element={<CustomersPage/>}/>
+        <Route path="wishlist" element={<WishlistPage/>}/>
+        <Route path="review" element={<ReviewPage/>}/>
+        <Route path="auditlog" element={<AuditLogPage/>}/>
+        <Route path="revenue" element={<RevenuePage/>}/>
+        <Route path="instock" element={<InStockPage/>}/>
         <Route path="*" element={<Navigate to="orders" replace/>}/>
       </Route>
     </Routes>

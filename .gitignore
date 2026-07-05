@@ -30,3 +30,6 @@ Thumbs.db
 db/
 docs/
 *.md
+
+# 截圖 / 圖片（素材放 Supabase Storage，不進版）
+*.png
