@@ -207,11 +207,11 @@ export function DistributionPage(){
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><tr>
               <th style={th}>商品名稱</th><th style={th}>規格</th><th style={th}>總訂購</th>
-              <th style={th}>已採買</th><th style={th}>已配</th><th style={th}>未配</th><th style={th}>待配池</th><th style={th}>缺貨</th>
+              <th style={th}>已採買</th><th style={th}>已配</th><th style={th}>未配</th><th style={th}>待配池</th><th style={th}>在手</th><th style={th}>缺貨</th>
               <th style={th}>訂單數</th><th style={th}>相關訂單</th><th style={th}>採買狀態</th><th style={th}>操作</th>
             </tr></thead>
             <tbody>
-              {sumFiltered.length===0 ? <tr><td style={td} colSpan={12}>目前沒有資料</td></tr> :
+              {sumFiltered.length===0 ? <tr><td style={td} colSpan={13}>目前沒有資料</td></tr> :
                sumFiltered.map((s,i)=>(
                 <tr key={i}>
                   <td style={{...td,fontWeight:500}}>{s.product_name}</td>
@@ -221,6 +221,7 @@ export function DistributionPage(){
                   <td style={{...td,color:C.green}}>{s.purchased_qty}</td>
                   <td style={{...td,color:C.amber}}>{s.unpurchased_qty}</td>
                   <td style={{...td,color:C.accent,fontWeight:600}}>{s.pool_qty}</td>
+                  <td style={{...td,fontWeight:600}}>{s.on_hand_qty}</td>
                   <td style={{...td,color:C.red}}>{s.out_of_stock_qty}</td>
                   <td style={td}>{s.order_count}</td>
                   <td style={{...td,whiteSpace:"normal",maxWidth:260}}>

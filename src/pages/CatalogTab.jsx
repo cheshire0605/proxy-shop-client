@@ -5,6 +5,9 @@ import { AnnouncementBar } from "../components/AnnouncementBar";
 import { fmtMoney, sanitize, safePrice, safeQty, secureUid, parseItemName, isImgSrc, formatShortDate } from "../utils";
 import { TW_BANKS } from "../constants";
 
+// 現貨可賣量＝在手(stock)−已預約(reserved)；代購 stock=null 視為無限
+const availOf = v => v && v.stock!=null ? Math.max(0, Number(v.stock)-(Number(v.reserved)||0)) : null;
+
 // ─── 商品詳情（單一 SKU；variant.stock=null 代購無限、數字現貨庫存）──────
 function ProductSheet({product,onAdd,onClose}){
   const variants=(product.variants||[]).filter(v=>v.status!=="off");
@@ -15,7 +18,7 @@ function ProductSheet({product,onAdd,onClose}){
   const sel=variants.find(v=>v.id===selId);
   const payType=isStock?"full":(product.payment_type||"full");   // 現貨一律全額
   const selDeposit=sel?Number(sel.deposit_amount)||0:0;
-  const selStock=sel&&sel.stock!=null?Number(sel.stock):null;    // null=無限(代購)
+  const selStock=availOf(sel);                                   // 可賣量；null=無限(代購)
   const maxQty=selStock==null?99:Math.max(0,selStock);
   const q=Math.min(qty,Math.max(1,maxQty));
   const prices=variants.map(v=>Number(v.price)||0).filter(x=>x>0);
@@ -68,11 +71,11 @@ function ProductSheet({product,onAdd,onClose}){
           <div style={{fontSize:13,fontWeight:500,marginBottom:8,color:C.textMid}}>規格</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
             {variants.map(v=>{
-              const so=v.stock!=null&&Number(v.stock)<=0, on=selId===v.id;
+              const av=availOf(v), so=av!=null&&av<=0, on=selId===v.id;
               return(
                 <button key={v.id} disabled={so} onClick={()=>{setSelId(v.id);setQty(1);}}
                   style={{padding:"8px 14px",borderRadius:99,fontSize:13,cursor:so?"not-allowed":"pointer",opacity:so?.45:1,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"transparent",color:on?C.accent:C.textMid,fontWeight:on?500:400}}>
-                  {v.spec||"標準"}{v.price>0?` $${v.price}`:""}{v.stock!=null?` · ${so?"售完":`剩 ${v.stock}`}`:""}
+                  {v.spec||"標準"}{v.price>0?` $${v.price}`:""}{av!=null?` · ${so?"售完":`剩 ${av}`}`:""}
                 </button>
               );
             })}
@@ -106,7 +109,7 @@ function ProductCard({p,idx,qtyInCart,onOpen}){
   const prices=variants.map(v=>Number(v.price)||0).filter(x=>x>0);
   const minPrice=prices.length?Math.min(...prices):0;
   const hasMultiple=prices.length>1&&Math.max(...prices)>minPrice;
-  const soldOut=isStock&&variants.length>0&&variants.every(v=>v.stock!=null&&Number(v.stock)<=0);
+  const soldOut=isStock&&variants.length>0&&variants.every(v=>{const a=availOf(v);return a!=null&&a<=0;});
   return(
     <div className="fadeUp" style={{animationDelay:`${idx*.03}s`,background:C.bgCard,borderRadius:16,overflow:"hidden",cursor:"pointer",border:`1px solid ${C.borderLight}`,boxShadow:C.shadow,opacity:soldOut?.6:1}} onClick={onOpen}>
       <div style={{background:C.bgDeep,aspectRatio:"1/1",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
@@ -123,6 +126,13 @@ function ProductCard({p,idx,qtyInCart,onOpen}){
   );
 }
 
+// 取貨方式：門市欄的標籤/提示/是否必填依方式而定
+const DELIVERY = [
+  { v:"shopee",   l:"賣貨便", storeLabel:"7-11 門市", storePh:"取件門市（賣貨便）", storeReq:true  },
+  { v:"meetup",   l:"面交",   storeLabel:"面交地點",  storePh:"約定地點（選填）",   storeReq:false },
+  { v:"delivery", l:"宅配",   storeLabel:"宅配地址",  storePh:"完整收件地址",     storeReq:true  },
+];
+
 export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,updateCartQty,removeFromCart,submitOrder,announcements,member,autoCancelHours=36}){
   const [activeCat,setActiveCat]=useState("all");
   const [search,setSearch]=useState("");
@@ -134,6 +144,8 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
   const [payLast5,setPayLast5]=useState("");
   const [payBank,setPayBank]=useState("");
   const [payErr,setPayErr]=useState("");
+  const [step,setStep]=useState("cart");                       // 兩步式結帳：cart → info
+  const [deliveryMethod,setDeliveryMethod]=useState("shopee"); // 取貨方式
   // 收件資訊（預帶會員資料，可針對這張訂單修改）
   const [ship,setShip]=useState({recipient_name:"",recipient_phone:"",recipient_store:""});
   useEffect(()=>{
@@ -144,6 +156,9 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
       recipient_store: s.recipient_store || member.seven_store     || "",
     }));
   },[member]);
+
+  // 關閉購物車時回到第一步
+  useEffect(()=>{ if(!showCart) setStep("cart"); },[showCart]);
 
   // 深連結：網址帶 ?product=ID 自動打開該商品詳情（用完清掉參數）
   useEffect(()=>{
@@ -165,14 +180,14 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
     setPayErr("");
     if(!ship.recipient_name.trim()){ setPayErr("請填收件人姓名"); return; }
     if(!/^09\d{8}$/.test(ship.recipient_phone.trim())){ setPayErr("收件電話須為 09 開頭、共 10 碼"); return; }
-    if(!ship.recipient_store.trim()){ setPayErr("請填 7-11 取件門市"); return; }
+    if(dm.storeReq && !ship.recipient_store.trim()){ setPayErr(`請填${dm.storeLabel}`); return; }
     const amt=Number(payAmount)||0;
     const last5=payLast5||"";
     // 匯款資訊改必填（銀行/金額/末5碼三者皆須填）
     if(!payBank){ setPayErr("請選擇匯款銀行"); return; }
     if(amt<=0){ setPayErr("請填寫匯款金額"); return; }
     if(last5.length!==5){ setPayErr("請填寫完整匯款帳號末 5 碼"); return; }
-    submitOrder({ payAmount: amt, payLast5: last5, payBank, ship });
+    submitOrder({ payAmount: amt, payLast5: last5, payBank, ship, deliveryMethod });
     setPayAmount(""); setPayLast5(""); setPayBank(""); setPayErr("");
   };
 
@@ -180,6 +195,7 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
   const amtErr   = (payAmount!=="" && Number(payAmount)<=0) ? "金額須大於 0" : "";
   const last5Err = (payLast5.length>0 && payLast5.length<5) ? "請填完整 5 碼" : "";
   const bd = (err,empty) => err ? C.red : (empty ? C.accent : C.border);   // 邊框色
+  const dm = DELIVERY.find(d=>d.v===deliveryMethod) || DELIVERY[0];        // 目前取貨方式
 
   const inCart=id=>cart.find(c=>c.id===id);
   const active=(products||[]).filter(p=>p.status==="on");
@@ -260,12 +276,13 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
       {showCart && (
         <div style={{display:"flex",flexDirection:"column"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-            <button onClick={()=>setShowCart(false)} style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${C.border}`,background:C.bgCard,fontSize:18,cursor:"pointer",color:C.textMid,flexShrink:0}}>←</button>
-            <h2 style={{fontSize:18,fontWeight:700,margin:0}}>購物車</h2>
+            <button onClick={()=> step==="info" ? setStep("cart") : setShowCart(false)} style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${C.border}`,background:C.bgCard,fontSize:18,cursor:"pointer",color:C.textMid,flexShrink:0}}>←</button>
+            <h2 style={{fontSize:18,fontWeight:700,margin:0}}>{step==="info" ? "填寫結帳資訊" : "購物車"}</h2>
           </div>
           {cart.length===0
             ?<div style={{textAlign:"center",padding:"40px 0",color:C.faint}}>購物車是空的</div>
             :<>
+              {step==="cart" && <>
               {cart.map((item,i)=>(
                 <div key={item.id}>
                   <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 0"}}>
@@ -325,6 +342,25 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
                 );
               })()}
 
+              {/* 下一步：填寫結帳資訊 */}
+              <Btn full onClick={()=>{ setPayErr(""); setStep("info"); }}>下一步：填寫結帳資訊 →</Btn>
+              <div style={{fontSize:11,color:C.faint,textAlign:"center",marginTop:12,lineHeight:1.6}}>下一步填寫取貨方式與匯款資訊</div>
+              </>}
+
+              {step==="info" && <>
+              {/* 取貨方式 */}
+              <div style={{background:C.bgDeep,borderRadius:C.rSm,padding:"14px 16px",marginBottom:12,border:`1px solid ${C.border}`}}>
+                <div style={{fontSize:11,color:C.muted,marginBottom:10,letterSpacing:.5,fontWeight:600}}>📦 取貨方式</div>
+                <div style={{display:"flex",gap:8}}>
+                  {DELIVERY.map(opt=>(
+                    <button key={opt.v} onClick={()=>setDeliveryMethod(opt.v)}
+                      style={{flex:1,padding:"9px 12px",borderRadius:99,border:`1.5px solid ${deliveryMethod===opt.v?C.accent:C.border}`,background:deliveryMethod===opt.v?C.accentBg:"#fff",color:deliveryMethod===opt.v?C.accent:C.textMid,fontSize:13,fontWeight:deliveryMethod===opt.v?600:400,cursor:"pointer"}}>
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* 收件資訊（預帶會員資料，可修改此單） */}
               <div style={{background:C.bgDeep,borderRadius:C.rSm,padding:"14px 16px",marginBottom:12,border:`1px solid ${C.border}`}}>
                 <div style={{fontSize:11,color:C.muted,marginBottom:10,letterSpacing:.5,fontWeight:600}}>📦 收件資訊（可修改此單）</div>
@@ -332,7 +368,7 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
                   {[
                     {key:"recipient_name",label:"收件人姓名",ph:"取件姓名"},
                     {key:"recipient_phone",label:"收件電話",ph:"09xxxxxxxx",check:v=>v&&!/^09\d{8}$/.test(v)?"電話須為 09 開頭、共 10 碼":""},
-                    {key:"recipient_store",label:"7-11 門市",ph:"取件門市（賣貨便）"},
+                    {key:"recipient_store",label:dm.storeLabel,ph:dm.storePh},
                   ].map(f=>{
                     const err=f.check?f.check(ship[f.key].trim()):"";
                     return(
@@ -383,7 +419,9 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
 
               {payErr&&<div style={{fontSize:12,color:C.red,background:C.redBg,padding:"8px 12px",borderRadius:C.rSm,marginBottom:10}}>{payErr}</div>}
               <Btn full onClick={doSubmit}>確認送出訂單</Btn>
+              <button onClick={()=>{ setPayErr(""); setStep("cart"); }} style={{width:"100%",marginTop:10,padding:"10px",background:"none",border:"none",color:C.muted,fontSize:13,cursor:"pointer"}}>← 返回購物車</button>
               <div style={{fontSize:11,color:C.faint,textAlign:"center",marginTop:12,lineHeight:1.8}}>送出後業者確認並與您聯繫<br/>代購最終價格以業者報價為準</div>
+              </>}
             </>
           }
         </div>

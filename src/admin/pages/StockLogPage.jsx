@@ -3,7 +3,7 @@ import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { th, td } from "../ui";
 
-const REASON = { sale:"售出", cancel:"取消回補", restock:"進貨", convert:"轉現貨", adjust:"調整" };
+const REASON = { sale:"售出", reserve:"預約佔位", ship:"出庫（寄出）", cancel:"取消/釋放", restock:"進貨", convert:"轉現貨", adjust:"調整" };
 
 export function StockLogPage(){
   const [rows, setRows] = useState([]);

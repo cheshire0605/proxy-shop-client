@@ -6,6 +6,8 @@ import { calcPayment, orderStage as stageOf } from "../adminUtils";
 import { TW_BANKS } from "../../constants";
 import { AddOrderModal } from "./AddOrderModal";
 
+const DM_LABEL = { shopee:"賣貨便", meetup:"面交", delivery:"宅配" };
+
 // 訂單流水線階段（顏色標籤；階段推導共用 adminUtils.orderStage）
 const STAGES = [
   { key:"pending_review", label:"待審核", color:C.blue,   bg:C.blueBg   },
@@ -42,6 +44,7 @@ function OrderCard({ o, onChange }){
     else if (stage==="cancelled") patch = { status:"cancelled" };
     await supabase.from("orders").update({ ...patch, updated_at:new Date().toISOString() }).eq("id", o.id);
     if (stage==="cancelled") await supabase.rpc("restore_stock", { p_order_id:o.id });
+    if (stage==="shipped" || stage==="arrived") await supabase.rpc("ship_order", { p_order_id:o.id });  // 現貨出庫扣在手
     setBusy(false); onChange();
   };
   const savePayment = async () => {
@@ -113,6 +116,17 @@ function OrderCard({ o, onChange }){
           <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginTop:10,color:C.muted}}><span>商品小計</span><span>{fmtMoney(p.total)}</span></div>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.muted}}><span>成本</span><span>{fmtMoney(cost)}</span></div>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,color:C.green,paddingTop:4}}><span>利潤</span><span>{fmtMoney(profit)}</span></div>
+
+          {/* 取貨 / 收件資訊 */}
+          {(o.delivery_method || o.recipient_name || o.recipient_phone || o.recipient_store) && (
+            <div style={{fontSize:12,color:C.muted,marginTop:14,lineHeight:1.9,background:C.bgDeep,borderRadius:8,padding:"10px 12px"}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:4}}>📦 取貨 / 收件</div>
+              <div>方式：{DM_LABEL[o.delivery_method]||"賣貨便"}</div>
+              {o.recipient_name  && <div>收件人：{o.recipient_name}</div>}
+              {o.recipient_phone && <div>電話：{o.recipient_phone}</div>}
+              {o.recipient_store && <div>門市/地址：{o.recipient_store}</div>}
+            </div>
+          )}
 
           {/* 付款紀錄 */}
           <div style={{fontSize:13,fontWeight:700,margin:"16px 0 8px"}}>付款紀錄</div>

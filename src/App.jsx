@@ -141,6 +141,7 @@ function MainApp({lineUser,data,setData}){
       recipient_name: sanitize(ship.recipient_name || "", 50),
       recipient_phone: sanitize(ship.recipient_phone || "", 20),
       recipient_store: sanitize(ship.recipient_store || "", 100),
+      delivery_method: sanitize(payInfo.deliveryMethod || "shopee", 20),
     };
     const p_items=cart.map(c=>{
       const pay={ payment_type: c.payment_type||"full", deposit_amount: Number(c.deposit_amount)||0, cost: Number(c.cost)||0 };
