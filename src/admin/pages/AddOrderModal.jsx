@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney } from "../../utils";
@@ -10,7 +10,28 @@ const blank = () => ({ key:Math.random().toString(36).slice(2), name:"", spec:""
 
 export function AddOrderModal({ onClose, onCreated }){
   const [customer, setCustomer] = useState("");
+  const [customerLineId, setCustomerLineId] = useState(null);  // 選到既有客人才有；null=臨時客人
+  const [allCust, setAllCust] = useState([]);
+  const [showList, setShowList] = useState(false);
   const [rows, setRows] = useState([blank()]);
+
+  // 聚合客人來源：會員 + 歷史訂單 + 許願清單
+  useEffect(()=>{
+    (async()=>{
+      const [{ data:members }, { data:orders }, { data:wishes }] = await Promise.all([
+        supabase.from("members").select("line_user_id, line_name, community_name, phone"),
+        supabase.from("orders").select("customer_line_id, customer_name").order("created_at",{ascending:false}),
+        supabase.from("wishlist").select("customer_line_id, customer_name"),
+      ]);
+      const map = {};
+      (members||[]).forEach(m=>{ const k=m.line_user_id; if(!k)return; map[k]={ key:k, line_id:k, name:m.community_name||m.line_name||"會員", community:m.community_name||"", phone:m.phone||"", source:"會員" }; });
+      (orders||[]).forEach(o=>{ const k=o.customer_line_id||o.customer_name; if(!k||map[k])return; map[k]={ key:k, line_id:o.customer_line_id||null, name:o.customer_name||"匿名", community:"", phone:"", source:"歷史訂單" }; });
+      (wishes||[]).forEach(w=>{ const k=w.customer_line_id||w.customer_name; if(!k||map[k])return; map[k]={ key:k, line_id:w.customer_line_id||null, name:w.customer_name||"匿名", community:"", phone:"", source:"許願" }; });
+      setAllCust(Object.values(map));
+    })();
+  },[]);
+  const _cs = customer.trim();
+  const custMatches = allCust.filter(c=> !_cs || c.name.includes(_cs) || c.community.includes(_cs) || (c.phone||"").includes(_cs));
   const [payBank, setPayBank] = useState("");
   const [payAmount, setPayAmount] = useState("");
   const [payLast5, setPayLast5] = useState("");
@@ -30,6 +51,7 @@ export function AddOrderModal({ onClose, onCreated }){
     setBusy(true);
     const p_order = {
       customer_name: customer.trim() || "手動客人",
+      customer_line_id: customerLineId || "",   // 空 → RPC 自動產生 manual:xxx（臨時客人）
       total,
       deposit_paid: Number(payAmount)||0,
       deposit_last5: payLast5||"",
@@ -52,7 +74,29 @@ export function AddOrderModal({ onClose, onCreated }){
         <button onClick={onClose} style={{ marginLeft:"auto", width:32, height:32, borderRadius:"50%", border:"none", background:C.bgDeep, color:C.muted, fontSize:16, cursor:"pointer" }}>✕</button>
       </div>
 
-      <div style={{ marginBottom:14 }}><label style={lab}>客人名稱</label><input value={customer} onChange={e=>setCustomer(e.target.value)} placeholder="手動客人 / 社群名" style={inp}/></div>
+      <div style={{ marginBottom:14, position:"relative" }}>
+        <label style={lab}>客人</label>
+        <input value={customer}
+          onChange={e=>{ setCustomer(e.target.value); setCustomerLineId(null); setShowList(true); }}
+          onFocus={()=>setShowList(true)} onBlur={()=>setTimeout(()=>setShowList(false),150)}
+          placeholder="搜尋 會員/歷史客人/許願，或直接打字＝臨時客人" style={inp}/>
+        {customerLineId && <div style={{ fontSize:11, color:C.green, marginTop:3 }}>✓ 已連結客人，訂單會出現在他的帳號</div>}
+        {showList && (
+          <div style={{ position:"absolute", zIndex:20, left:0, right:0, background:"#fff", border:`1px solid ${C.border}`, borderRadius:8, marginTop:4, maxHeight:200, overflowY:"auto", boxShadow:C.shadow }}>
+            {custMatches.length===0 ? <div style={{ padding:"10px 12px", fontSize:12, color:C.faint }}>無符合，將以「{customer.trim()||"手動客人"}」建立臨時客人</div> :
+             custMatches.slice(0,20).map(c=>(
+              <div key={c.key} onMouseDown={()=>{ setCustomer(c.name); setCustomerLineId(c.line_id); setShowList(false); }}
+                style={{ padding:"8px 12px", cursor:"pointer", display:"flex", alignItems:"center", gap:8, borderBottom:`1px solid ${C.borderLight}` }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13 }}>{c.name}{c.community&&c.community!==c.name?` @${c.community}`:""}</div>
+                  {c.phone && <div style={{ fontSize:11, color:C.muted }}>{c.phone}</div>}
+                </div>
+                <span style={{ fontSize:10, color:C.muted, background:C.bgDeep, borderRadius:4, padding:"1px 6px", flexShrink:0 }}>{c.source}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>商品明細</div>
       <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:10 }}>

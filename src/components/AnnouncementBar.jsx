@@ -12,6 +12,7 @@ export function AnnouncementBar({announcements}){
           <div key={a.id} style={{display:"flex",alignItems:"flex-start",gap:10,background:C.accentBg,border:`1px solid ${C.accent}30`,borderRadius:C.rSm,padding:"12px 14px"}}>
             <span style={{fontSize:16,flexShrink:0,lineHeight:1.4}}>📢</span>
             <div style={{flex:1,minWidth:0}}>
+              {a.title&&<div style={{fontSize:14,fontWeight:700,color:C.accentDark,marginBottom:3}}>{a.title}</div>}
               <div style={{fontSize:13,color:C.accentDark,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{a.content}</div>
               {date&&<div style={{fontSize:10,color:C.muted,marginTop:4,letterSpacing:.3}}>{date}</div>}
             </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney } from "../../utils";
-import { ORDER_LABEL } from "../adminUtils";
+import { ORDER_LABEL, STAGE_LABEL, applyStage, orderStage as stageOf } from "../adminUtils";
 
 const lastTime = c => Math.max(...c.orders.map(o=>new Date(o.created_at||0).getTime()), 0);
 
@@ -11,13 +11,28 @@ export function CustomersPage(){
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [openKey, setOpenKey] = useState(null);
+  const [openOrder, setOpenOrder] = useState(null);
+  const [notes, setNotes] = useState({});        // key -> 已存備註
+  const [noteDraft, setNoteDraft] = useState({}); // key -> 編輯中文字
+  const [toast, setToast] = useState("");
+  const flash = m => { setToast(m); setTimeout(()=>setToast(""), 2000); };
+
+  const saveNote = async (key) => {
+    const note = (noteDraft[key]||"").slice(0,500);
+    const { error } = await supabase.from("customer_notes").upsert({ customer_key:key, note, updated_at:new Date().toISOString() });
+    if (error) { flash("備註儲存失敗"); return; }
+    setNotes(n=>({ ...n, [key]:note })); flash("備註已儲存 📝");
+  };
 
   const load = async () => {
     setLoading(true);
-    const [{ data:orders }, { data:members }] = await Promise.all([
+    const [{ data:orders }, { data:members }, { data:notesData }] = await Promise.all([
       supabase.from("orders").select("*, items:order_items(*)").order("created_at",{ascending:false}),
       supabase.from("members").select("*"),
+      supabase.from("customer_notes").select("*"),
     ]);
+    const noteBy = {}; (notesData||[]).forEach(n=>{ noteBy[n.customer_key]=n.note||""; });
+    setNotes(noteBy); setNoteDraft(noteBy);
     const memberBy = {}; (members||[]).forEach(m=>{ memberBy[m.line_user_id]=m; });
     const map = {};
     (orders||[]).filter(o=>!o.archived).forEach(o=>{
@@ -61,6 +76,7 @@ export function CustomersPage(){
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:15, fontWeight:600, color:C.text }}>{c.name}{c.member?.community_name?<span style={{ fontSize:12, color:C.muted, marginLeft:6 }}>@{c.member.community_name}</span>:null}</div>
               <div style={{ fontSize:12, color:C.muted }}>{c.orders.length} 張訂單 · 累計 {fmtMoney(total)}</div>
+              {notes[c.key] ? <div style={{ fontSize:11, color:C.accent, marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>📝 {notes[c.key]}</div> : null}
             </div>
             <div style={{ fontSize:12, color:C.muted }}>{isOpen?"▲":"▼"}</div>
           </div>
@@ -79,24 +95,58 @@ export function CustomersPage(){
                   {infoRow("LINE ID", c.member.line_id)}
                 </>) : <div style={{ fontSize:13, color:C.faint }}>此客人尚未填寫會員資料</div>}
               </div>
+              {/* 客人備註（僅業者可見） */}
+              <div style={{ background:C.surface, borderRadius:12, padding:"10px 14px", marginBottom:12 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:C.accentDark, marginBottom:6 }}>📝 備註（僅業者可見）</div>
+                <textarea value={noteDraft[c.key]??""} onChange={e=>setNoteDraft(d=>({ ...d, [c.key]:e.target.value }))} rows={2}
+                  placeholder="電話、地址、VIP、注意事項…" maxLength={500}
+                  style={{ width:"100%", background:C.bg, border:`1.5px solid ${C.border}`, borderRadius:8, padding:"8px 10px", fontSize:13, boxSizing:"border-box", resize:"vertical", fontFamily:"inherit", color:C.text }}/>
+                <div style={{ display:"flex", justifyContent:"flex-end", marginTop:6 }}>
+                  <button onClick={()=>saveNote(c.key)} style={{ background:C.accent, color:"#fff", border:"none", borderRadius:8, padding:"6px 16px", fontSize:12, fontWeight:600, cursor:"pointer" }}>儲存備註</button>
+                </div>
+              </div>
               {/* 訂單清單 */}
               <div style={{ fontSize:12, fontWeight:700, color:C.accentDark, marginBottom:6 }}>訂單（{c.orders.length}）</div>
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                {c.orders.map(o=>(
-                  <div key={o.id} style={{ display:"flex", alignItems:"center", gap:10, background:C.surface, borderRadius:10, padding:"8px 12px" }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13 }}>#{o.no} <span style={{ color:C.faint, fontSize:11 }}>{o.created_at?new Date(o.created_at).toLocaleDateString("zh-TW"):""}</span></div>
-                      <div style={{ fontSize:11, color:C.muted }}>{(o.items||[]).length} 項 · {ORDER_LABEL[o.status]||o.status}</div>
+                {c.orders.map(o=>{
+                  const oOpen = openOrder===o.id;
+                  return (
+                  <div key={o.id} style={{ background:C.surface, borderRadius:10, overflow:"hidden" }}>
+                    <div onClick={()=>setOpenOrder(oOpen?null:o.id)} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", cursor:"pointer" }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13 }}>#{o.no} <span style={{ color:C.faint, fontSize:11 }}>{o.created_at?new Date(o.created_at).toLocaleDateString("zh-TW"):""}</span></div>
+                        <div style={{ fontSize:11, color:C.muted }}>{(o.items||[]).length} 項 · {ORDER_LABEL[o.status]||o.status} {oOpen?"▲":"▼"}</div>
+                      </div>
+                      <div style={{ fontSize:13, fontWeight:600, color:o.status==="cancelled"?C.faint:C.accentDark, textDecoration:o.status==="cancelled"?"line-through":"none" }}>{fmtMoney(o.total)}</div>
                     </div>
-                    <div style={{ fontSize:13, fontWeight:600, color:o.status==="cancelled"?C.faint:C.accentDark, textDecoration:o.status==="cancelled"?"line-through":"none" }}>{fmtMoney(o.total)}</div>
+                    {oOpen && (
+                      <div style={{ borderTop:`1px solid ${C.borderLight}`, background:C.bgDeep, padding:"8px 12px", display:"flex", flexDirection:"column", gap:3 }}>
+                        {(o.items||[]).length===0 ? <div style={{ fontSize:12, color:C.faint }}>無品項</div> :
+                         (o.items||[]).map(it=>(
+                          <div key={it.id} style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:C.textMid, gap:8 }}>
+                            <span style={{ minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{it.product_name}{it.spec?` / ${it.spec}`:""} ×{it.qty}</span>
+                            <span style={{ flexShrink:0 }}>{fmtMoney((it.price||0)*(it.qty||1))}</span>
+                          </div>
+                        ))}
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:6, paddingTop:6, borderTop:`1px solid ${C.borderLight}` }}>
+                          <span style={{ fontSize:11, color:C.muted }}>改狀態</span>
+                          <select value={stageOf(o)} onClick={e=>e.stopPropagation()} onChange={async e=>{ await applyStage(o, e.target.value); load(); }}
+                            style={{ padding:"4px 10px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:12, background:"#fff" }}>
+                            {Object.entries(STAGE_LABEL).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
         </div>
         );
       })}
+      {toast && <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)", background:C.text, color:"#fff", padding:"11px 22px", borderRadius:99, fontSize:13, zIndex:200, boxShadow:C.shadow }}>{toast}</div>}
     </div>
   );
 }

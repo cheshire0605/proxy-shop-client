@@ -27,6 +27,7 @@ function AllocationModal({ target, onClose, onDone }){
     ]);
     const list = (items || []).filter(it => it.orders && it.orders.status !== "cancelled" && (!it.variant_id || it.variant?.stock == null))
       .map(it => ({ id: it.id, no: it.orders.no, customer: it.orders.customer_name, qty: it.qty, allocated: it.allocated_qty || 0, _orig: it.allocated_qty || 0 }));
+    list.sort((a,b)=>String(a.no||"").localeCompare(String(b.no||"")));   // 先來後到（單號）
     setRows(list);
     setPurchasedTotal((lots || []).reduce((s,l)=>s+(l.qty||0),0));
     setLoading(false);
@@ -51,6 +52,24 @@ function AllocationModal({ target, onClose, onDone }){
     const { error } = await supabase.rpc("add_purchase_lot", { p_name: target.product_name, p_spec: target.spec||"", p_qty: q, p_cost: lotCostFinal });
     if (error) { setErr("新增採買失敗：" + error.message); setBusy(false); return; }
     setLotQty(""); setLotCost(""); setLotJpy(""); await reload(); setBusy(false);
+  };
+
+  // 一鍵入庫：記這批採買 → 依單號先來後到(FIFO)把新總量自動配滿各訂單
+  const quickInbound = async () => {
+    const q = Number(lotQty)||0; if (q<=0) { setErr("請填『這次買到』的數量"); return; }
+    setBusy(true); setErr("");
+    try {
+      const { error:e1 } = await supabase.rpc("add_purchase_lot", { p_name: target.product_name, p_spec: target.spec||"", p_qty: q, p_cost: lotCostFinal });
+      if (e1) throw e1;
+      let left = purchasedTotal + q;
+      const targets = [...rows].sort((a,b)=>String(a.no||"").localeCompare(String(b.no||"")))
+        .map(r=>{ const give = Math.min(r.qty, Math.max(0,left)); left -= give; return { id:r.id, give, orig:Number(r._orig)||0 }; });
+      targets.sort((a,b)=>(a.give-a.orig)-(b.give-b.orig));   // 先減後加，避免中途超池
+      for (const t of targets) {
+        if (t.give !== t.orig) { const { error } = await supabase.rpc("allocate_order_item", { p_item_id:t.id, p_qty:t.give }); if (error) throw error; }
+      }
+      onDone(`已入庫 ${q} 件並自動配貨 ✅`);
+    } catch(e){ setErr("入庫失敗：" + (e.message||e)); setBusy(false); }
   };
 
   const saveAlloc = async () => {
@@ -108,10 +127,12 @@ function AllocationModal({ target, onClose, onDone }){
                 <div style={{flex:1}}><label style={label}>日幣價格 ¥</label><input type="number" value={lotJpy} onChange={e=>setLotJpy(e.target.value)} style={inp} placeholder="0"/></div>
                 <div style={{flex:1}}><label style={label}>匯率 ¥1＝NT$</label><input type="number" value={rate} onChange={e=>setRate(e.target.value)} style={inp}/></div>
               </div>}
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{flex:1,fontSize:12,color:C.muted}}>單件成本：<b style={{color:C.accent}}>NT$ {lotCostFinal}</b></div>
-            <button onClick={addLot} disabled={busy} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"9px 20px",fontSize:13,fontWeight:600,cursor:busy?"not-allowed":"pointer",whiteSpace:"nowrap"}}>加入</button>
+          <div style={{fontSize:12,color:C.muted,marginBottom:8}}>單件成本：<b style={{color:C.accent}}>NT$ {lotCostFinal}</b></div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={addLot} disabled={busy} style={{flex:1,background:"#fff",color:C.accent,border:`1.5px solid ${C.accent}`,borderRadius:8,padding:"9px",fontSize:13,fontWeight:600,cursor:busy?"not-allowed":"pointer",whiteSpace:"nowrap"}}>只記採買</button>
+            <button onClick={quickInbound} disabled={busy} style={{flex:2,background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"9px",fontSize:13,fontWeight:600,cursor:busy?"not-allowed":"pointer",whiteSpace:"nowrap"}}>一鍵入庫並配貨（FIFO）</button>
           </div>
+          <div style={{fontSize:11,color:C.faint,marginTop:6}}>「一鍵入庫」＝記採買＋依訂單先來後到自動配滿，不夠的留在配貨清單。</div>
         </div>
 
         {/* 分配到訂單 */}

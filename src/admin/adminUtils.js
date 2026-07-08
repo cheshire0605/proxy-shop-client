@@ -31,6 +31,21 @@ export const SHIPPING_LABEL = { pending:"未處理", preparing:"備貨中", ship
 export const PURCHASE_LABEL = { unpurchased:"未採買", partial:"部分採買", purchased:"已採買", out_of_stock:"缺貨", partial_out_of_stock:"部分缺貨", cancelled:"已取消" };
 export const ORDER_LABEL = { pending_review:"待審核", active:"進行中", cancelled:"已取消" };
 
+export const STAGE_LABEL = { pending_review:"待審核", to_purchase:"待採買", purchased:"已採買", shipped:"已寄出", arrived:"已到台", cancelled:"已取消" };
+
+// 套用訂單階段（訂單頁 / 客人頁共用）：改 orders + 觸發現貨出庫/釋放預約
+export async function applyStage(order, stage){
+  let patch = {};
+  if (stage==="pending_review") patch = { status:"pending_review", shipping_status:"pending" };
+  else if (stage==="to_purchase"||stage==="purchased") patch = { status:"active", shipping_status:"pending" };
+  else if (stage==="shipped") patch = { status:"active", shipping_status:"shipped" };
+  else if (stage==="arrived") patch = { status:"active", shipping_status:"arrived" };
+  else if (stage==="cancelled") patch = { status:"cancelled" };
+  await supabase.from("orders").update({ ...patch, updated_at:new Date().toISOString() }).eq("id", order.id);
+  if (stage==="cancelled") await supabase.rpc("restore_stock", { p_order_id:order.id });
+  if (stage==="shipped" || stage==="arrived") await supabase.rpc("ship_order", { p_order_id:order.id });
+}
+
 // 訂單流水線階段推導（訂單頁 / 統計卡共用）：待審核→待採買→已採買→已寄出→已到台/已取消
 export const orderStage = (o) => {
   if (o.status === "cancelled") return "cancelled";

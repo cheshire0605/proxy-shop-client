@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 import { C } from "../theme";
+
+const IDLE_WARN_MS = 25 * 60 * 1000;  // 25 分警告
+const IDLE_OUT_MS  = 30 * 60 * 1000;  // 30 分自動登出
 
 const NAV = [
   { to: "/admin/orders",       label: "訂單管理", icon: "📋" },
@@ -24,7 +27,25 @@ const NAV = [
 export function AdminLayout(){
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [idleWarn, setIdleWarn] = useState(false);
   const logout = async () => { try { await supabase.auth.signOut({ scope: "local" }); } catch {} navigate("/admin"); window.location.reload(); };
+
+  // 閒置自動登出：25 分警告、30 分登出（任何操作重置）
+  const resetIdleRef = useRef(()=>{});
+  useEffect(()=>{
+    let warnT, outT; const warnShown = { v:false };
+    const reset = () => {
+      if (warnShown.v) { warnShown.v = false; setIdleWarn(false); }
+      clearTimeout(warnT); clearTimeout(outT);
+      warnT = setTimeout(()=>{ warnShown.v = true; setIdleWarn(true); }, IDLE_WARN_MS);
+      outT  = setTimeout(()=>{ logout(); }, IDLE_OUT_MS);
+    };
+    resetIdleRef.current = reset;
+    const evts = ["mousemove","keydown","click","touchstart","scroll"];
+    evts.forEach(e=>window.addEventListener(e, reset, { passive:true }));
+    reset();
+    return ()=>{ clearTimeout(warnT); clearTimeout(outT); evts.forEach(e=>window.removeEventListener(e, reset)); };
+  }, []);
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,color:C.text}}>
@@ -33,6 +54,14 @@ export function AdminLayout(){
         <button onClick={()=>setOpen(true)} aria-label="開啟選單" style={{border:"none",background:"none",fontSize:22,cursor:"pointer",lineHeight:1,color:C.textMid,padding:4}}>☰</button>
         <div style={{fontSize:16,fontWeight:700,letterSpacing:.5,color:C.accent}}>代購後台</div>
       </div>
+
+      {/* 閒置警告 */}
+      {idleWarn && (
+        <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",background:C.amberBg,borderBottom:`1px solid ${C.amber}`,color:C.amber,fontSize:13,position:"sticky",top:53,zIndex:9}}>
+          <span>已閒置一段時間，5 分鐘後將自動登出。</span>
+          <button onClick={()=>resetIdleRef.current()} style={{marginLeft:"auto",background:C.amber,color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>繼續工作</button>
+        </div>
+      )}
 
       {/* 左側抽屜 + 遮罩 */}
       {open && (

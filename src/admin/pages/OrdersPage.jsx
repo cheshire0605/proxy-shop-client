@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney } from "../../utils";
-import { calcPayment, orderStage as stageOf } from "../adminUtils";
+import { calcPayment, orderStage as stageOf, applyStage } from "../adminUtils";
 import { TW_BANKS } from "../../constants";
 import { AddOrderModal } from "./AddOrderModal";
 
@@ -34,17 +34,10 @@ function OrderCard({ o, onChange }){
   const itemsLabel = items.length>1 ? `${firstName} 等 ${items.length} 件` : firstName;
 
   const openEdit = () => { setForm({ deposit_paid:o.deposit_paid||0, deposit_last5:o.deposit_last5||"", deposit_bank:o.deposit_bank||"", cod_received:o.cod_received||0 }); setEditing(true); };
-  const setStage = async (stage) => {
+  const setStage = async (stage) => { setBusy(true); await applyStage(o, stage); setBusy(false); onChange(); };
+  const markPaid = async () => {   // 一鍵標記全額收齊：deposit_paid=total、cod_received=0 → 各付款方式皆判「已收齊」
     setBusy(true);
-    let patch = {};
-    if (stage==="pending_review") patch = { status:"pending_review", shipping_status:"pending" };
-    else if (stage==="to_purchase"||stage==="purchased") patch = { status:"active", shipping_status:"pending" };
-    else if (stage==="shipped") patch = { status:"active", shipping_status:"shipped" };
-    else if (stage==="arrived") patch = { status:"active", shipping_status:"arrived" };
-    else if (stage==="cancelled") patch = { status:"cancelled" };
-    await supabase.from("orders").update({ ...patch, updated_at:new Date().toISOString() }).eq("id", o.id);
-    if (stage==="cancelled") await supabase.rpc("restore_stock", { p_order_id:o.id });
-    if (stage==="shipped" || stage==="arrived") await supabase.rpc("ship_order", { p_order_id:o.id });  // 現貨出庫扣在手
+    await supabase.from("orders").update({ deposit_paid:Number(p.total)||0, cod_received:0, updated_at:new Date().toISOString() }).eq("id", o.id);
     setBusy(false); onChange();
   };
   const savePayment = async () => {
@@ -54,6 +47,7 @@ function OrderCard({ o, onChange }){
   };
   const delOrder = async () => { if(!window.confirm("確定刪除這張訂單？")) return; await supabase.from("orders").delete().eq("id", o.id); onChange(); };
   const archiveOrder = async () => { await supabase.from("orders").update({ archived:true, updated_at:new Date().toISOString() }).eq("id", o.id); onChange(); };
+  const rejectOrder = async () => { if(!window.confirm("拒絕並取消這張訂單？（現貨預約會自動釋放）")) return; await setStage("cancelled"); };
 
   const box = { background:C.surface, borderRadius:C.r, boxShadow:C.shadow, marginBottom:12, overflow:"hidden" };
   const pill = (bg,col,txt) => <span style={{background:bg,color:col,fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99}}>{txt}</span>;
@@ -75,6 +69,12 @@ function OrderCard({ o, onChange }){
             <div style={{fontSize:18,fontWeight:700,color:C.text,marginTop:2}}>{fmtMoney(p.total)}</div>
           </div>
         </div>
+        {stageOf(o)==="pending_review" && (
+          <div style={{display:"flex",gap:8,marginTop:12}}>
+            <button onClick={()=>setStage("to_purchase")} disabled={busy} style={{flex:1,background:C.green,color:"#fff",border:"none",borderRadius:8,padding:"9px",fontSize:13,fontWeight:600,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1}}>✓ 接受訂單</button>
+            <button onClick={rejectOrder} disabled={busy} style={{flex:1,background:C.redBg,color:C.red,border:"none",borderRadius:8,padding:"9px",fontSize:13,fontWeight:600,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1}}>✕ 拒絕</button>
+          </div>
+        )}
         <div onClick={()=>setOpen(v=>!v)} style={{textAlign:"center",fontSize:12,color:C.muted,cursor:"pointer",marginTop:10,userSelect:"none"}}>{open?"▲ 收起":"▼ 展開詳情"}</div>
       </div>
 
@@ -158,7 +158,10 @@ function OrderCard({ o, onChange }){
                 <div style={{fontSize:15,fontWeight:700,color:C.blue}}>{fmtMoney(p.pending)}</div>
               </div>
             )}
-            <button onClick={openEdit} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:99,padding:"7px 16px",fontSize:12,cursor:"pointer",color:C.textMid}}>✏️ 編輯付款資訊</button>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={openEdit} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:99,padding:"7px 16px",fontSize:12,cursor:"pointer",color:C.textMid}}>✏️ 編輯付款資訊</button>
+              {p.pending>0 && <button onClick={markPaid} disabled={busy} style={{background:C.greenBg,color:C.green,border:"none",borderRadius:99,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:busy?"not-allowed":"pointer"}}>✓ 標記已收齊</button>}
+            </div>
           </>)}
 
           {/* 底部 */}
