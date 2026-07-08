@@ -164,7 +164,12 @@ function MainApp({lineUser,data,setData}){
     }catch(e){
       console.error(e);
       const raw=e.message||"";
-      alert(raw.includes("OUT_OF_STOCK") ? "很抱歉，部分現貨剛售完或庫存不足，請調整數量後再試" : ("下單失敗:"+(raw||"請稍後再試")));
+      alert(
+        raw.includes("OUT_OF_STOCK")    ? "很抱歉，部分現貨剛售完或庫存不足，請調整數量後再試" :
+        raw.includes("TOO_MANY_ITEMS")  ? "單筆訂單最多 50 項商品，請分批下單" :
+        raw.includes("BAD_QTY")         ? "單項數量須在 1〜99 之間" :
+        raw.includes("BAD_PRICE")       ? "手動輸入的金額超出範圍，請確認後再試" :
+        ("下單失敗:"+(raw||"請稍後再試")));
       reloadData();
     }
   };

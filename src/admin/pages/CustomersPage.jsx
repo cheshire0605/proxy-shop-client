@@ -68,7 +68,8 @@ export function CustomersPage(){
   const load = async () => {
     setLoading(true);
     const [{ data:orders }, { data:members }, { data:notesData }] = await Promise.all([
-      supabase.from("orders").select("*, items:order_items(*)").order("created_at",{ascending:false}),
+      // 只抓列表/明細會用到的欄位（不整包 * 拉）
+      supabase.from("orders").select("id, no, customer_line_id, customer_name, status, shipping_status, total, archived, created_at, items:order_items(id, product_name, spec, qty, price, allocated_qty, purchase_status)").order("created_at",{ascending:false}),
       supabase.from("members").select("*"),
       supabase.from("customer_notes").select("*"),
     ]);

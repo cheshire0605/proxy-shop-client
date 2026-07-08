@@ -43,7 +43,17 @@ export async function applyStage(order, stage){
   else if (stage==="cancelled") patch = { status:"cancelled" };
   await supabase.from("orders").update({ ...patch, updated_at:new Date().toISOString() }).eq("id", order.id);
   if (stage==="cancelled") await supabase.rpc("restore_stock", { p_order_id:order.id });
-  if (stage==="shipped" || stage==="arrived") await supabase.rpc("ship_order", { p_order_id:order.id });
+  if (stage==="shipped" || stage==="arrived") {
+    await supabase.rpc("ship_order", { p_order_id:order.id });
+    // 自動 LINE 通知客人（需已部署 send-line；失敗不擋流程；手動客人自動略過）
+    const cid = order.customer_line_id || "";
+    if (cid && !cid.startsWith("manual:")) {
+      const msg = stage==="shipped"
+        ? `📦 您的訂單 #${order.no} 已寄出囉！到台後會再通知您～`
+        : `✈️ 您的訂單 #${order.no} 已到台！請至「出貨」頁查看取貨/結單資訊～`;
+      supabase.functions.invoke("send-line", { body:{ customerIds:[cid], message:msg } }).catch(()=>{});
+    }
+  }
 }
 
 // 訂單流水線階段推導（訂單頁 / 統計卡共用）：待審核→待採買→已採買→已寄出→已到台/已取消

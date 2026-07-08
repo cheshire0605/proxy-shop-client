@@ -10,8 +10,9 @@
 //        SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY 由平台自動注入。
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// CORS：設了 ALLOWED_ORIGIN（如 https://xxx.pages.dev）就只允許該網域；未設回退 *（開發用）
 const cors = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") || "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };

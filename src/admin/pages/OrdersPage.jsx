@@ -194,7 +194,8 @@ export function OrdersPage(){
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from("orders").select("*, items:order_items(*)").order("created_at",{ascending:false});
+    // 只載最近 500 筆（防訂單累積後整包拉爆）；更早的請走封存區/匯出報表
+    const { data } = await supabase.from("orders").select("*, items:order_items(*)").order("created_at",{ascending:false}).limit(500);
     setOrders(data || []);
     setLoading(false);
   };
@@ -255,6 +256,7 @@ export function OrdersPage(){
        filtered.length===0 ? <div style={{color:C.faint,padding:40,textAlign:"center",background:C.surface,borderRadius:C.r}}>沒有符合的訂單</div> :
        filtered.map(({o})=><OrderCard key={o.id} o={o} onChange={load}/>)
       }
+      {orders.length>=500 && <div style={{fontSize:12,color:C.faint,textAlign:"center",padding:8}}>僅顯示最近 500 筆；更早的訂單請至封存區或匯出報表查詢</div>}
     </div>
   );
 }
