@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { uploadImage } from "../adminUtils";
+import { logAction } from "../auditLog";
 import { isImgSrc } from "../../utils";
 import { Modal } from "../ui";
 import { StatsHeader } from "../StatsHeader";
@@ -90,6 +91,7 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
         const { error:ce } = await supabase.from("variant_costs").upsert([{ variant_id:vid, jpy_price:Number(v.jpy_price)||0, cost:Number(v.cost)||0, rate:(v.rate===""||v.rate==null)?null:Number(v.rate) }], { onConflict:"variant_id" });
         if (ce) throw ce;
       }
+      logAction("編輯商品", form.name || "");
       onSaved();
     } catch (e) { setErr(e.message || String(e)); setSaving(false); }
   };
@@ -279,11 +281,13 @@ export function ProductsPage(){
     if (!window.confirm("刪除此商品（含所有規格）？")) return;
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) { alert("刪除失敗：此商品可能已有訂單引用，建議維持下架。\n" + error.message); return; }
+    logAction("刪除商品", items.find(x=>x.id===id)?.name || "");
     load();
   };
   const toggleStatus = async (it) => {
     const next = it.status === "on" ? "off" : "on";
     await supabase.from("products").update({ status: next, updated_at: new Date().toISOString() }).eq("id", it.id);
+    logAction(next==="on"?"上架商品":"下架商品", it.name || "");
     load();
   };
 

@@ -1,4 +1,5 @@
 import { supabase } from "../supabase";
+import { logAction } from "./auditLog";
 
 // ─── 付款計算（對應需求總文件 §5）──────────────────────────────
 export function calcPayment(o){
@@ -42,6 +43,7 @@ export async function applyStage(order, stage){
   else if (stage==="arrived") patch = { status:"active", shipping_status:"arrived" };
   else if (stage==="cancelled") patch = { status:"cancelled" };
   await supabase.from("orders").update({ ...patch, updated_at:new Date().toISOString() }).eq("id", order.id);
+  logAction("訂單狀態改為「"+(STAGE_LABEL[stage]||stage)+"」", `#${order.no} · ${order.customer_name||"匿名"}`);
   if (stage==="cancelled") await supabase.rpc("restore_stock", { p_order_id:order.id });
   if (stage==="shipped" || stage==="arrived") {
     await supabase.rpc("ship_order", { p_order_id:order.id });

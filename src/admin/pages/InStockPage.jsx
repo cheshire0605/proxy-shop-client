@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney, isImgSrc } from "../../utils";
+import { logAction } from "../auditLog";
 
 export function InStockPage(){
   const [rows, setRows] = useState([]);
@@ -30,7 +31,7 @@ export function InStockPage(){
     const avail = newStock - (row.reserved||0);        // 可賣＝在手−已預約
     const { error } = await supabase.from("product_variants").update({ stock:newStock, status:avail<=0?"sold_out":"on", updated_at:new Date().toISOString() }).eq("id", row.id);
     if (error) { flash("更新失敗"); return; }
-    if (delta!==0) await supabase.from("stock_movements").insert([{ variant_id:row.id, delta, reason:"adjust" }]);
+    if (delta!==0) { await supabase.from("stock_movements").insert([{ variant_id:row.id, delta, reason:"adjust" }]); logAction("調整現貨庫存", `${row.product}${row.spec?`/${row.spec}`:""} · ${delta>0?"+":""}${delta}`); }
     flash("庫存已更新"); load();
   };
   const step = (row, d) => commit(row, row.stock + d);

@@ -15,7 +15,6 @@ import { ArchivePage } from "./pages/ArchivePage";
 import { AnnouncementsPage } from "./pages/AnnouncementsPage";
 import { CustomersPage } from "./pages/CustomersPage";
 import { WishlistPage } from "./pages/WishlistPage";
-import { ReviewPage } from "./pages/ReviewPage";
 import { AuditLogPage } from "./pages/AuditLogPage";
 import { RevenuePage } from "./pages/RevenuePage";
 import { InStockPage } from "./pages/InStockPage";
@@ -59,7 +58,6 @@ export default function AdminApp(){
         <Route path="announcements" element={<AnnouncementsPage/>}/>
         <Route path="customers" element={<CustomersPage/>}/>
         <Route path="wishlist" element={<WishlistPage/>}/>
-        <Route path="review" element={<ReviewPage/>}/>
         <Route path="auditlog" element={<AuditLogPage/>}/>
         <Route path="revenue" element={<RevenuePage/>}/>
         <Route path="instock" element={<InStockPage/>}/>

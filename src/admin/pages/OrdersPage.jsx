@@ -3,6 +3,7 @@ import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney } from "../../utils";
 import { calcPayment, orderStage as stageOf, applyStage } from "../adminUtils";
+import { logAction } from "../auditLog";
 import { TW_BANKS } from "../../constants";
 import { AddOrderModal } from "./AddOrderModal";
 
@@ -45,8 +46,8 @@ function OrderCard({ o, onChange }){
     await supabase.from("orders").update({ deposit_paid:Number(form.deposit_paid)||0, deposit_last5:form.deposit_last5||"", deposit_bank:form.deposit_bank||"", cod_received:Number(form.cod_received)||0, payment_method:form.payment_method||"full_payment", logistics:(form.logistics||"").slice(0,50), tracking_no:(form.tracking_no||"").slice(0,60), shipping_notes:(form.shipping_notes||"").slice(0,200), updated_at:new Date().toISOString() }).eq("id", o.id);
     setBusy(false); setEditing(false); onChange();
   };
-  const delOrder = async () => { if(!window.confirm("確定刪除這張訂單？")) return; await supabase.from("orders").delete().eq("id", o.id); onChange(); };
-  const archiveOrder = async () => { await supabase.from("orders").update({ archived:true, updated_at:new Date().toISOString() }).eq("id", o.id); onChange(); };
+  const delOrder = async () => { if(!window.confirm("確定刪除這張訂單？")) return; await supabase.from("orders").delete().eq("id", o.id); logAction("刪除訂單", `#${o.no}`); onChange(); };
+  const archiveOrder = async () => { await supabase.from("orders").update({ archived:true, updated_at:new Date().toISOString() }).eq("id", o.id); logAction("封存訂單", `#${o.no}`); onChange(); };
   // 手動品項成本補登（存 admin-only order_item_costs，RPC 同步重算利潤）
   const itemCostOf = (it) => { const ic = Array.isArray(it.item_cost) ? it.item_cost[0] : it.item_cost; return ic ? (Number(ic.cost)||0) : 0; };
   const editItemCost = async (it) => {
@@ -56,6 +57,7 @@ function OrderCard({ o, onChange }){
     if (isNaN(n) || n < 0) { alert("請輸入正確金額"); return; }
     const { error } = await supabase.rpc("set_item_cost", { p_item_id: it.id, p_cost: n });
     if (error) { alert("補登失敗："+error.message); return; }
+    logAction("補登品項成本", `#${o.no} · ${it.product_name} NT$${n}`);
     onChange();
   };
   const rejectOrder = async () => {

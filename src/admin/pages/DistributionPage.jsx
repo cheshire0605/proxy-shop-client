@@ -3,6 +3,7 @@ import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney } from "../../utils";
 import { PURCHASE_LABEL } from "../adminUtils";
+import { logAction } from "../auditLog";
 import { th, td, inp, label, Modal } from "../ui";
 
 // ─── 採買配貨 v2：分批採買 + 持續配貨(allocated_qty) + 待分配池隨時轉現貨 ───
@@ -51,6 +52,7 @@ function AllocationModal({ target, onClose, onDone }){
     setBusy(true); setErr("");
     const { error } = await supabase.rpc("add_purchase_lot", { p_name: target.product_name, p_spec: target.spec||"", p_qty: q, p_cost: lotCostFinal });
     if (error) { setErr("新增採買失敗：" + error.message); setBusy(false); return; }
+    logAction("新增採買批次", `${target.product_name}${target.spec?`/${target.spec}`:""} · ${q} 件`);
     setLotQty(""); setLotCost(""); setLotJpy(""); await reload(); setBusy(false);
   };
 
@@ -68,6 +70,7 @@ function AllocationModal({ target, onClose, onDone }){
       for (const t of targets) {
         if (t.give !== t.orig) { const { error } = await supabase.rpc("allocate_order_item", { p_item_id:t.id, p_qty:t.give }); if (error) throw error; }
       }
+      logAction("一鍵入庫配貨", `${target.product_name}${target.spec?`/${target.spec}`:""} · ${q} 件`);
       onDone(`已入庫 ${q} 件並自動配貨 ✅`);
     } catch(e){ setErr("入庫失敗：" + (e.message||e)); setBusy(false); }
   };
@@ -82,6 +85,7 @@ function AllocationModal({ target, onClose, onDone }){
         const { error } = await supabase.rpc("allocate_order_item", { p_item_id: r.id, p_qty: Math.max(0, Math.min(Number(r.allocated)||0, r.qty)) });
         if (error) throw error;
       }
+      logAction("儲存配貨", `${target.product_name}${target.spec?`/${target.spec}`:""}`);
       onDone("已儲存配貨 ✅");
     } catch(e){ setErr("儲存失敗：" + (e.message||e)); setBusy(false); }
   };
@@ -93,6 +97,7 @@ function AllocationModal({ target, onClose, onDone }){
     setBusy(true); setErr("");
     const { error } = await supabase.rpc("convert_pool_to_stock", { p_name: target.product_name, p_spec: target.spec||"", p_qty: q, p_price: Number(convPrice)||0, p_image: "" });
     if (error) { setErr("轉現貨失敗：" + error.message); setBusy(false); return; }
+    logAction("轉現貨", `${target.product_name}${target.spec?`/${target.spec}`:""} · ${q} 件`);
     onDone(`已將 ${q} 件轉為現貨 ✅`);
   };
 

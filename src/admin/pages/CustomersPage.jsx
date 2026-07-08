@@ -3,6 +3,7 @@ import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney } from "../../utils";
 import { ORDER_LABEL, STAGE_LABEL, applyStage, orderStage as stageOf } from "../adminUtils";
+import { logAction } from "../auditLog";
 
 const lastTime = c => Math.max(...c.orders.map(o=>new Date(o.created_at||0).getTime()), 0);
 
@@ -43,6 +44,7 @@ export function CustomersPage(){
     if (error) { setSendResult("發送失敗："+(error.message||error)); return; }
     if (data?.error) { setSendResult("發送失敗："+data.error); return; }
     setSendResult(`✅ 已發送 ${data.sent} 人${data.skipped?`，${data.skipped} 人未收到（未綁 LINE / 未加好友）`:""}`);
+    logAction("LINE 通知", `${notify.label} · 已送 ${data.sent} 人`);
   };
 
   // 合併訂單（同客人多張併一張）
@@ -62,6 +64,7 @@ export function CustomersPage(){
     const { error } = await supabase.rpc("merge_orders", { p_target:target.id, p_sources:sources });
     setMerging(false);
     if (error) { flash("合併失敗："+error.message); return; }
+    logAction("合併訂單", `${sel.length} 張 → #${target.no}`);
     cancelMerge(); flash("已合併 ✅"); load();
   };
 

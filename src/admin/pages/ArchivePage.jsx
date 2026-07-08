@@ -3,6 +3,7 @@ import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney, isImgSrc } from "../../utils";
 import { ORDER_LABEL, toCSV, downloadCSV } from "../adminUtils";
+import { logAction } from "../auditLog";
 
 export function ArchivePage(){
   const [orders, setOrders] = useState([]);
@@ -28,7 +29,7 @@ export function ArchivePage(){
     if (!window.confirm("確定永久刪除？此操作無法復原。")) return;
     const { error } = await supabase.from("orders").delete().eq("id", id);
     if (error) { flash("刪除失敗："+error.message); return; }
-    flash("已刪除"); load();
+    logAction("刪除封存訂單", `#${orders.find(x=>x.id===id)?.no||""}`); flash("已刪除"); load();
   };
 
   const exportCSV = () => {
@@ -45,7 +46,7 @@ export function ArchivePage(){
     if (!window.confirm(`確定永久刪除這 ${filtered.length} 筆封存訂單？此操作無法復原。`)) return;
     const { error } = await supabase.from("orders").delete().in("id", filtered.map(o=>o.id));
     if (error) { flash("刪除失敗："+error.message); return; }
-    flash(`已刪除 ${filtered.length} 筆`); load();
+    logAction("批次刪除封存訂單", `${filtered.length} 筆`); flash(`已刪除 ${filtered.length} 筆`); load();
   };
 
   const filtered = orders.filter(o => filter==="all" || o.status===filter);

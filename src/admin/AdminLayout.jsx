@@ -8,7 +8,6 @@ const IDLE_OUT_MS  = 30 * 60 * 1000;  // 30 分自動登出
 
 const NAV = [
   { to: "/admin/orders",       label: "訂單管理", icon: "📋" },
-  { to: "/admin/review",       label: "待審核",   icon: "📝" },
   { to: "/admin/distribution", label: "配貨採買", icon: "🛒" },
   { to: "/admin/customers",    label: "客人",     icon: "👤" },
   { to: "/admin/products",     label: "賣場",     icon: "🏪" },
