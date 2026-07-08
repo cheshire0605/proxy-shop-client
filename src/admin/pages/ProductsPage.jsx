@@ -31,8 +31,10 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
   const set = (k,v) => setForm(f => ({ ...f, [k]: v }));
   const setVar = (id, patch) => setVariants(vs => vs.map(v => v.id===id ? { ...v, ...patch } : v));
   const delVar = (id) => setVariants(vs => vs.filter(v => v.id !== id));
-  // 成本自動 = 日幣 × 商品匯率（改日幣時重算；直接改成本＝手動覆寫）
-  const onJpy  = (v,val) => setVar(v.id, { jpy_price: val, cost: Math.round((Number(val)||0)*(Number(form.rate)||0)) });
+  // 成本自動 = 日幣 × 匯率（款式匯率優先，空則用商品匯率；改日幣/匯率時重算；直接改成本＝手動覆寫）
+  const varRate = (v) => Number(v.rate ?? form.rate) || 0;
+  const onJpy  = (v,val) => setVar(v.id, { jpy_price: val, cost: Math.round((Number(val)||0)*varRate(v)) });
+  const onVarRate = (v,val) => setVar(v.id, { rate: val, cost: Math.round((Number(v.jpy_price)||0)*(Number(val)||0)) });
 
   const handleUpload = async (file) => {
     if (!file) return;
@@ -85,7 +87,7 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
           const { error } = await supabase.from("product_variants").update(payload).eq("id", v.id);
           if (error) throw error;
         }
-        const { error:ce } = await supabase.from("variant_costs").upsert([{ variant_id:vid, jpy_price:Number(v.jpy_price)||0, cost:Number(v.cost)||0 }], { onConflict:"variant_id" });
+        const { error:ce } = await supabase.from("variant_costs").upsert([{ variant_id:vid, jpy_price:Number(v.jpy_price)||0, cost:Number(v.cost)||0, rate:(v.rate===""||v.rate==null)?null:Number(v.rate) }], { onConflict:"variant_id" });
         if (ce) throw ce;
       }
       onSaved();
@@ -197,7 +199,8 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
                 {isStock
                   ? <div><label style={lab}>庫存</label><input style={inp} type="number" value={v.stock==null?"":v.stock} onChange={e=>setVar(v.id,{stock:e.target.value})} placeholder="0"/></div>
                   : <div><label style={lab}>💰 訂金 NT$</label><input style={inp} type="number" value={v.deposit_amount==null?"":v.deposit_amount} onChange={e=>setVar(v.id,{deposit_amount:e.target.value})} placeholder="0"/></div>}
-                <div><label style={lab}>日幣價格 ¥（× {form.rate||0}）</label><input style={inp} type="number" value={v.jpy_price==null?"":v.jpy_price} onChange={e=>onJpy(v,e.target.value)} placeholder="0"/></div>
+                <div><label style={lab}>日幣價格 ¥</label><input style={inp} type="number" value={v.jpy_price==null?"":v.jpy_price} onChange={e=>onJpy(v,e.target.value)} placeholder="0"/></div>
+                <div><label style={lab}>💱 匯率（空＝{form.rate||0}）</label><input style={inp} type="number" value={v.rate==null?"":v.rate} onChange={e=>onVarRate(v,e.target.value)} placeholder={String(form.rate||0)}/></div>
                 <div style={{gridColumn:"1 / -1"}}><label style={lab}>成本 NT$（可手動覆寫）</label><input style={{...inp,color:C.accent,fontWeight:600}} type="number" value={v.cost==null?"":v.cost} onChange={e=>setVar(v.id,{cost:e.target.value})}/></div>
               </div>
               {!isStock && Number(v.deposit_amount)>0 && <div style={{fontSize:11,color:C.muted,marginTop:6}}>剩餘 NT${remain} 於取貨時付</div>}
@@ -255,7 +258,7 @@ export function ProductsPage(){
       supabase.from("variant_costs").select("*"),   // 成本（admin-only 表）
     ]);
     const costBy = {}; (costs || []).forEach(c => { costBy[c.variant_id] = c; });
-    setItems((prods || []).map(it => ({ ...it, variants: (it.variants || []).map(v => ({ ...v, jpy_price: costBy[v.id]?.jpy_price || 0, cost: costBy[v.id]?.cost || 0 })).sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||"")) })));
+    setItems((prods || []).map(it => ({ ...it, variants: (it.variants || []).map(v => ({ ...v, jpy_price: costBy[v.id]?.jpy_price || 0, cost: costBy[v.id]?.cost || 0, rate: costBy[v.id]?.rate ?? null })).sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||"")) })));
     setCats(categories || []);
     if (setting?.value) setGlobalRate(Number(setting.value) || 0.23);
     setLoading(false);

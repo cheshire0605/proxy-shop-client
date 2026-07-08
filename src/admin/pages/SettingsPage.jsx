@@ -26,6 +26,7 @@ export function SettingsPage(){
   const [autoCancelHours, setAutoCancelHours] = useState("36");
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState("");   // 哪個區塊儲存中
+  const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState(""); const [confirmPw, setConfirmPw] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [pwErr, setPwErr] = useState("");
@@ -61,16 +62,22 @@ export function SettingsPage(){
 
   const savePassword = async () => {
     setPwErr("");
+    if (!currentPw) return setPwErr("請輸入目前密碼");
     if (newPw.length<8) return setPwErr("新密碼至少 8 個字元");
     if (!/[A-Za-z]/.test(newPw)) return setPwErr("新密碼必須包含英文字母");
     if (!/[0-9]/.test(newPw)) return setPwErr("新密碼必須包含數字");
+    if (strength<2) return setPwErr("密碼強度不足（至少要「普通」）");
+    if (newPw===currentPw) return setPwErr("新密碼不可與目前密碼相同");
     if (newPw!==confirmPw) return setPwErr("新密碼與確認密碼不一致");
     setSavingKey("pw");
+    // 先用目前密碼重新驗證，確認是本人
+    const { error: authErr } = await supabase.auth.signInWithPassword({ email, password:currentPw });
+    if (authErr) { setSavingKey(""); return setPwErr("目前密碼不正確"); }
     const { error } = await supabase.auth.updateUser({ password:newPw });
     setSavingKey("");
     if (error) { setPwErr("更新失敗："+error.message); return; }
     logAction("帳號密碼已更新");
-    setNewPw(""); setConfirmPw("");
+    setCurrentPw(""); setNewPw(""); setConfirmPw("");
     flash("密碼已更新 🔐");
   };
 
@@ -122,6 +129,7 @@ export function SettingsPage(){
           <div style={{ fontSize:13, color:C.amber, marginBottom:16, padding:"10px 14px", background:C.amberBg, borderRadius:10, borderLeft:`3px solid ${C.amber}` }}>⚠️ 帳號登入採 Supabase Auth，此處可更改登入密碼。</div>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div><label style={lab}>目前帳號（Email）</label><input value={email} disabled style={{ ...inp, background:C.bgDeep, color:C.muted }}/></div>
+            <div><label style={lab}>目前密碼</label><input type={showPw?"text":"password"} value={currentPw} onChange={e=>{setCurrentPw(e.target.value);setPwErr("");}} placeholder="輸入現在的密碼以驗證身分" style={inp}/></div>
             <div>
               <label style={lab}>新密碼（至少 8 字元，含英文+數字）</label>
               <div style={{ position:"relative" }}>
@@ -137,7 +145,7 @@ export function SettingsPage(){
             </div>
             <div><label style={lab}>確認新密碼</label><input type={showPw?"text":"password"} value={confirmPw} onChange={e=>{setConfirmPw(e.target.value);setPwErr("");}} style={inp}/></div>
             {pwErr && <div style={{ background:C.redBg, border:`1.5px solid ${C.red}30`, borderRadius:10, padding:"10px 14px", fontSize:13, color:C.red, fontWeight:600 }}>⚠️ {pwErr}</div>}
-            <button onClick={savePassword} disabled={savingKey==="pw"||!newPw} style={primaryBtn({width:"100%",opacity:(savingKey==="pw"||!newPw)?.6:1})}>{savingKey==="pw"?"更新中…":"更新密碼"}</button>
+            <button onClick={savePassword} disabled={savingKey==="pw"||!newPw||!currentPw} style={primaryBtn({width:"100%",opacity:(savingKey==="pw"||!newPw||!currentPw)?.6:1})}>{savingKey==="pw"?"更新中…":"更新密碼"}</button>
           </div>
         </div>
 

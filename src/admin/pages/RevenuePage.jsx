@@ -2,13 +2,15 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney } from "../../utils";
-import { downloadCSV } from "../adminUtils";
+import { downloadCSV, orderStage, STAGE_LABEL } from "../adminUtils";
 import { logAction } from "../auditLog";
 
 export function RevenuePage(){
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState("month");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
 
   useEffect(()=>{
     supabase.from("orders").select("*, items:order_items(*)").then(({data})=>{ setOrders(data||[]); setLoading(false); });
@@ -24,6 +26,11 @@ export function RevenuePage(){
     if (range==="today") return t>=startToday();
     if (range==="week")  return t>=startWeek();
     if (range==="month") return t>=startMonth();
+    if (range==="custom") {
+      const s = customStart ? new Date(customStart+"T00:00:00").getTime() : -Infinity;
+      const e = customEnd   ? new Date(customEnd+"T23:59:59").getTime()   :  Infinity;
+      return t>=s && t<=e;
+    }
     return true;
   };
 
@@ -33,6 +40,10 @@ export function RevenuePage(){
   const profit = valid.reduce((s,o)=>s+(Number(o.profit)||0),0);
   const cost = revenue - profit;               // 成本 = 營收 − 利潤（成本明細不外流）
   const avg = valid.length ? Math.round(revenue/valid.length) : 0;
+  const profitRate = revenue>0 ? Math.round(profit/revenue*100) : 0;
+  // 訂單狀態統計（範圍內、不含封存）
+  const stageCounts = {};
+  scoped.forEach(o=>{ const s=orderStage(o); stageCounts[s]=(stageCounts[s]||0)+1; });
 
   // 商品銷量排行（成本已隱藏，只看銷量/營收）
   const prodMap = new Map();
@@ -91,16 +102,37 @@ export function RevenuePage(){
         <button onClick={exportCSV} style={{ marginLeft:"auto", background:C.green, color:"#fff", border:"none", borderRadius:99, padding:"7px 16px", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 匯出 CSV</button>
       </div>
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-        {rangePill("today","今日")}{rangePill("week","本週")}{rangePill("month","本月")}{rangePill("all","全部")}
+        {rangePill("today","今日")}{rangePill("week","本週")}{rangePill("month","本月")}{rangePill("all","全部")}{rangePill("custom","自訂")}
       </div>
+      {range==="custom" && (
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+          <input type="date" value={customStart} onChange={e=>setCustomStart(e.target.value)} style={{ padding:"7px 10px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13 }}/>
+          <span style={{ color:C.muted }}>～</span>
+          <input type="date" value={customEnd} onChange={e=>setCustomEnd(e.target.value)} style={{ padding:"7px 10px", border:`1.5px solid ${C.border}`, borderRadius:8, fontSize:13 }}/>
+        </div>
+      )}
 
       {/* KPI */}
       <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
         {kpi("營收", fmtMoney(revenue), C.accentDark)}
         {kpi("成本", fmtMoney(cost), C.amber)}
         {kpi("利潤", fmtMoney(profit), C.green)}
+        {kpi("利潤率", profitRate+"%", C.green)}
         {kpi("有效訂單", valid.length)}
         {kpi("客單價", fmtMoney(avg))}
+      </div>
+
+      {/* 訂單狀態統計 */}
+      <div style={{ background:C.surface, borderRadius:C.r, boxShadow:C.shadow, padding:18 }}>
+        <div style={{ fontSize:13, fontWeight:700, marginBottom:12 }}>訂單狀態（{scoped.length} 筆）</div>
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+          {["pending_review","to_purchase","purchased","shipped","arrived","cancelled"].map(k=>(
+            <div key={k} style={{ flex:"1 1 90px", textAlign:"center", background:C.bgDeep, borderRadius:10, padding:"10px 8px" }}>
+              <div style={{ fontSize:20, fontWeight:700, color:C.text }}>{stageCounts[k]||0}</div>
+              <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{STAGE_LABEL[k]}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* 月度趨勢 */}

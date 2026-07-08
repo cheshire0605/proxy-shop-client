@@ -47,7 +47,14 @@ function OrderCard({ o, onChange }){
   };
   const delOrder = async () => { if(!window.confirm("確定刪除這張訂單？")) return; await supabase.from("orders").delete().eq("id", o.id); onChange(); };
   const archiveOrder = async () => { await supabase.from("orders").update({ archived:true, updated_at:new Date().toISOString() }).eq("id", o.id); onChange(); };
-  const rejectOrder = async () => { if(!window.confirm("拒絕並取消這張訂單？（現貨預約會自動釋放）")) return; await setStage("cancelled"); };
+  const rejectOrder = async () => {
+    const reason = window.prompt("拒絕原因（選填，會記在訂單上；按取消放棄）：", "");
+    if (reason===null) return;
+    setBusy(true);
+    await supabase.from("orders").update({ cancel_reason:reason.slice(0,200), updated_at:new Date().toISOString() }).eq("id", o.id);
+    await applyStage(o, "cancelled");
+    setBusy(false); onChange();
+  };
 
   const box = { background:C.surface, borderRadius:C.r, boxShadow:C.shadow, marginBottom:12, overflow:"hidden" };
   const pill = (bg,col,txt) => <span style={{background:bg,color:col,fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99}}>{txt}</span>;
@@ -92,6 +99,7 @@ function OrderCard({ o, onChange }){
             <div><div style={label}>未付款</div><span style={{color:p.pending>0?C.amber:C.green}}>{fmtMoney(p.pending)}</span></div>
             <div><div style={label}>下單日期</div>{o.created_at?new Date(o.created_at).toLocaleDateString("zh-TW"):""}</div>
           </div>
+          {o.status==="cancelled" && o.cancel_reason && <div style={{fontSize:12,color:C.red,background:C.redBg,borderRadius:8,padding:"8px 12px",marginBottom:12}}>拒絕原因：{o.cancel_reason}</div>}
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
             <span style={{fontSize:12,color:C.muted}}>更改狀態：</span>
             <select value={stageOf(o)} disabled={busy} onChange={e=>setStage(e.target.value)} style={{padding:"7px 12px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,background:"#fff"}}>

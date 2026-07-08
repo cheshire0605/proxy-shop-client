@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { C } from "../../theme";
 import { fmtMoney, isImgSrc } from "../../utils";
-import { ORDER_LABEL } from "../adminUtils";
+import { ORDER_LABEL, toCSV, downloadCSV } from "../adminUtils";
 
 export function ArchivePage(){
   const [orders, setOrders] = useState([]);
@@ -31,12 +31,35 @@ export function ArchivePage(){
     flash("已刪除"); load();
   };
 
+  const exportCSV = () => {
+    downloadCSV("封存訂單.csv", toCSV(filtered, [
+      { label:"訂單編號", get:o=>"#"+(o.no||"") },
+      { label:"日期", get:o=>o.created_at?new Date(o.created_at).toLocaleDateString("zh-TW"):"" },
+      { label:"客人", get:o=>o.customer_name||"" },
+      { label:"狀態", get:o=>ORDER_LABEL[o.status]||o.status },
+      { label:"總金額", get:o=>Number(o.total)||0 },
+    ]));
+  };
+  const deleteAll = async () => {
+    if (!filtered.length) return;
+    if (!window.confirm(`確定永久刪除這 ${filtered.length} 筆封存訂單？此操作無法復原。`)) return;
+    const { error } = await supabase.from("orders").delete().in("id", filtered.map(o=>o.id));
+    if (error) { flash("刪除失敗："+error.message); return; }
+    flash(`已刪除 ${filtered.length} 筆`); load();
+  };
+
   const filtered = orders.filter(o => filter==="all" || o.status===filter);
   const statuses = ["all", ...Object.keys(ORDER_LABEL)];
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:12, maxWidth:720 }}>
-      <div style={{ fontWeight:700, fontSize:16, color:C.accentDark }}>📦 封存訂單（{orders.length} 筆）</div>
+      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+        <div style={{ fontWeight:700, fontSize:16, color:C.accentDark }}>📦 封存訂單（{orders.length} 筆）</div>
+        {filtered.length>0 && <>
+          <button onClick={exportCSV} style={{ marginLeft:"auto", background:C.green, color:"#fff", border:"none", borderRadius:99, padding:"6px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>📊 匯出</button>
+          <button onClick={deleteAll} style={{ background:C.redBg, color:C.red, border:"none", borderRadius:99, padding:"6px 14px", fontSize:12, fontWeight:600, cursor:"pointer" }}>🗑 全部刪除</button>
+        </>}
+      </div>
 
       <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
         {statuses.map(s=>{

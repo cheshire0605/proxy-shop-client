@@ -24,11 +24,12 @@ export function ReviewPage(){
     flash("已審核通過 ✅"); load();
   };
   const reject = async (o) => {
-    if (!window.confirm(`確定拒絕訂單 #${o.no}？將標記為已取消並回補現貨庫存。`)) return;
-    const { error } = await supabase.from("orders").update({ status:"cancelled", updated_at:new Date().toISOString() }).eq("id", o.id);
+    const reason = window.prompt(`拒絕訂單 #${o.no} 的原因（選填，會記在訂單上；按取消放棄）：`, "");
+    if (reason===null) return;
+    const { error } = await supabase.from("orders").update({ status:"cancelled", cancel_reason:reason.slice(0,200), updated_at:new Date().toISOString() }).eq("id", o.id);
     if (error) { flash("更新失敗"); return; }
     await supabase.rpc("restore_stock", { p_order_id:o.id });
-    logAction("拒絕訂單", `訂單 #${o.no} · ${o.customer_name||"匿名"}`);
+    logAction("拒絕訂單", `訂單 #${o.no} · ${o.customer_name||"匿名"}${reason?` · ${reason}`:""}`);
     flash("已拒絕並取消"); load();
   };
 
