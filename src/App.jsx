@@ -38,7 +38,7 @@ function MainApp({lineUser,data,setData}){
     try {
       const [ordersRes, productsRes, catRes, wishlistRes, annRes] = await Promise.all([
         supabase.from("orders").select("*, items:order_items(*)").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false}),
-        supabase.from("products").select("*, variants:product_variants(*)").eq("status","on").order("created_at",{ascending:false}),
+        supabase.from("products").select("*, variants:product_variants(*)").eq("status","on").eq("archived",false).order("created_at",{ascending:false}),
         supabase.from("categories").select("*").order("sort_order",{ascending:true}),
         supabase.from("wishlist").select("*").eq("customer_line_id",lineUser.userId).order("created_at",{ascending:false}),
         supabase.from("announcements").select("*").order("created_at",{ascending:false}),

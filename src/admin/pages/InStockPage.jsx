@@ -12,7 +12,7 @@ export function InStockPage(){
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from("products").select("*, variants:product_variants(*)").eq("type","stock").order("created_at",{ascending:false});
+    const { data } = await supabase.from("products").select("*, variants:product_variants(*)").eq("type","stock").eq("archived",false).order("created_at",{ascending:false});
     const list = [];
     (data||[]).forEach(p=>(p.variants||[]).forEach(v=>{
       if (v.stock==null) return;                       // 只列有庫存管理的 SKU

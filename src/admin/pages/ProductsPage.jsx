@@ -254,7 +254,7 @@ export function ProductsPage(){
   const load = async () => {
     setLoading(true);
     const [{ data: prods }, { data: categories }, { data: setting }, { data: costs }] = await Promise.all([
-      supabase.from("products").select("*, variants:product_variants(*)").order("created_at", { ascending: false }),
+      supabase.from("products").select("*, variants:product_variants(*)").eq("archived", false).order("created_at", { ascending: false }),
       supabase.from("categories").select("*").order("sort_order", { ascending: true }),
       supabase.from("settings").select("value").eq("key", "jpy_rate").maybeSingle(),
       supabase.from("variant_costs").select("*"),   // 成本（admin-only 表）
@@ -277,11 +277,12 @@ export function ProductsPage(){
     setEditing(full);
   };
 
-  const delItem = async (id) => {
-    if (!window.confirm("刪除此商品（含所有規格）？")) return;
-    const { error } = await supabase.from("products").delete().eq("id", id);
-    if (error) { alert("刪除失敗：此商品可能已有訂單引用，建議維持下架。\n" + error.message); return; }
-    logAction("刪除商品", items.find(x=>x.id===id)?.name || "");
+  const archiveItem = async (id) => {
+    const it = items.find(x=>x.id===id);
+    if (!window.confirm(`封存「${it?.name||"此商品"}」？\n將移出賣場清單、客人端不再顯示。在庫與資料保留，可在「封存區」查看或還原。`)) return;
+    const { error } = await supabase.from("products").update({ archived:true, updated_at:new Date().toISOString() }).eq("id", id);
+    if (error) { alert("封存失敗："+error.message); return; }
+    logAction("封存商品", it?.name || "");
     load();
   };
   const toggleStatus = async (it) => {
@@ -341,7 +342,7 @@ export function ProductsPage(){
             <div style={{ display:"flex", borderTop:`1px solid ${C.borderLight}` }}>
               <button onClick={()=>setEditing(it)} style={{ flex:1, border:"none", borderRight:`1px solid ${C.borderLight}`, background:"transparent", padding:"12px", fontSize:13, color:C.textMid, cursor:"pointer" }}>✏️ 編輯</button>
               <button onClick={()=>toggleStatus(it)} style={{ flex:1, border:"none", background:"transparent", padding:"12px", fontSize:13, color:C.textMid, cursor:"pointer" }}>{on?"🚫 下架":"✓ 上架"}</button>
-              {!on && <button onClick={()=>delItem(it.id)} style={{ width:56, border:"none", borderLeft:`1px solid ${C.borderLight}`, background:"transparent", padding:"12px", fontSize:15, color:C.red, cursor:"pointer" }}>🗑</button>}
+              {!on && <button onClick={()=>archiveItem(it.id)} title="封存" style={{ width:56, border:"none", borderLeft:`1px solid ${C.borderLight}`, background:"transparent", padding:"12px", fontSize:15, color:C.textMid, cursor:"pointer" }}>📦</button>}
             </div>
           </div>
           );
