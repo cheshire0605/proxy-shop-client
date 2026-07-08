@@ -47,6 +47,17 @@ function OrderCard({ o, onChange }){
   };
   const delOrder = async () => { if(!window.confirm("確定刪除這張訂單？")) return; await supabase.from("orders").delete().eq("id", o.id); onChange(); };
   const archiveOrder = async () => { await supabase.from("orders").update({ archived:true, updated_at:new Date().toISOString() }).eq("id", o.id); onChange(); };
+  // 手動品項成本補登（存 admin-only order_item_costs，RPC 同步重算利潤）
+  const itemCostOf = (it) => { const ic = Array.isArray(it.item_cost) ? it.item_cost[0] : it.item_cost; return ic ? (Number(ic.cost)||0) : 0; };
+  const editItemCost = async (it) => {
+    const v = window.prompt(`「${it.product_name}」單件成本 NT$（數量 ${it.qty}，會同步重算此單利潤）：`, String(itemCostOf(it)));
+    if (v===null) return;
+    const n = Number(v);
+    if (isNaN(n) || n < 0) { alert("請輸入正確金額"); return; }
+    const { error } = await supabase.rpc("set_item_cost", { p_item_id: it.id, p_cost: n });
+    if (error) { alert("補登失敗："+error.message); return; }
+    onChange();
+  };
   const rejectOrder = async () => {
     const reason = window.prompt("拒絕原因（選填，會記在訂單上；按取消放棄）：", "");
     if (reason===null) return;
@@ -115,7 +126,13 @@ function OrderCard({ o, onChange }){
               <div key={it.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.borderLight}`}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13}}>{done && <span style={{color:C.green,marginRight:6}}>✓已配貨</span>}{it.product_name}{it.spec?` / ${it.spec}`:""}</div>
-                  <div style={{fontSize:11,color:C.faint}}>×{it.qty}</div>
+                  <div style={{fontSize:11,color:C.faint}}>×{it.qty}
+                    {!it.variant_id && (   /* 手動品項：可補登成本（目錄商品成本跟著商品，不在此改） */
+                      <button onClick={()=>editItemCost(it)} style={{marginLeft:8,background:"none",border:"none",color:C.accent,fontSize:11,cursor:"pointer",padding:0}}>
+                        成本 {fmtMoney(itemCostOf(it))} ✎
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div style={{fontSize:13,fontWeight:600}}>{fmtMoney((it.price||0)*(it.qty||1))}</div>
               </div>
@@ -195,7 +212,8 @@ export function OrdersPage(){
   const load = async () => {
     setLoading(true);
     // 只載最近 500 筆（防訂單累積後整包拉爆）；更早的請走封存區/匯出報表
-    const { data } = await supabase.from("orders").select("*, items:order_items(*)").order("created_at",{ascending:false}).limit(500);
+    // item_cost = 手動品項的補登成本（admin-only 表）
+    const { data } = await supabase.from("orders").select("*, items:order_items(*, item_cost:order_item_costs(cost))").order("created_at",{ascending:false}).limit(500);
     setOrders(data || []);
     setLoading(false);
   };

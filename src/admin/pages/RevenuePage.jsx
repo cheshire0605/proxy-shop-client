@@ -12,8 +12,11 @@ export function RevenuePage(){
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
+  const [monthsData, setMonthsData] = useState([]);
   useEffect(()=>{
     supabase.from("orders").select("*, items:order_items(*)").then(({data})=>{ setOrders(data||[]); setLoading(false); });
+    // 月趨勢改由 DB view 聚合（近 12 月），前端不再掃全歷史
+    supabase.from("revenue_monthly").select("*").order("month",{ascending:true}).then(({data})=>{ setMonthsData((data||[]).slice(-12)); });
   }, []);
 
   const now = new Date();
@@ -60,13 +63,8 @@ export function RevenuePage(){
   valid.forEach(o=>{ const k=o.customer_line_id||o.customer_name||"匿名"; const c=custMap.get(k)||{name:o.customer_name||"匿名",count:0,revenue:0}; c.count++; c.revenue+=Number(o.total)||0; custMap.set(k,c); });
   const topCustomers = [...custMap.values()].sort((a,b)=>b.revenue-a.revenue).slice(0,8);
 
-  // 月度趨勢（近 12 月，不受 range 影響）
-  const monMap = new Map();
-  orders.filter(o=>!o.archived && o.status!=="cancelled" && o.created_at).forEach(o=>{
-    const d=new Date(o.created_at); const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-    const m=monMap.get(k)||{month:k,revenue:0,profit:0,orders:0}; m.revenue+=Number(o.total)||0; m.profit+=Number(o.profit)||0; m.orders++; monMap.set(k,m);
-  });
-  const months = [...monMap.values()].sort((a,b)=>a.month.localeCompare(b.month)).slice(-12);
+  // 月度趨勢（近 12 月，不受 range 影響）：revenue_monthly view 已在 DB 端聚合
+  const months = monthsData.map(m=>({ month:m.month, revenue:Number(m.revenue)||0, profit:Number(m.profit)||0, orders:Number(m.orders)||0 }));
   const maxRev = Math.max(1, ...months.map(m=>m.revenue));
 
   const exportCSV = () => {
