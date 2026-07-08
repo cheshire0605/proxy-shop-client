@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { C } from "../theme";
 import { ORDER_STATUS } from "../constants";
 
@@ -13,8 +13,6 @@ export const Btn = ({children,onClick,variant="accent",sm,full,style:sx,disabled
   const v={
     accent:{background:C.accent,color:"#fff",border:"none"},
     outline:{background:"transparent",color:C.textMid,border:`1.5px solid ${C.border}`},
-    ghost:{background:"transparent",color:C.muted,border:"none"},
-    rose:{background:C.roseBg,color:C.rose,border:`1px solid ${C.rose}30`},
   };
   return(
     <button onClick={onClick} disabled={disabled} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,padding:sm?"7px 16px":"12px 24px",fontSize:sm?12:14,fontWeight:500,borderRadius:99,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.4:1,transition:"all .2s",width:full?"100%":undefined,...v[variant],...sx}}
@@ -43,7 +41,7 @@ export const StatusPill = ({status})=>{
 export const HR = ({style:sx})=><div style={{height:1,background:C.borderLight,...sx}}/>;
 
 export const Toast = ({msg,onDone})=>{
-  useState(()=>{const t=setTimeout(onDone,2400);return()=>clearTimeout(t);});
+  useEffect(()=>{const t=setTimeout(onDone,2400);return()=>clearTimeout(t);},[msg,onDone]);
   return <div style={{position:"fixed",bottom:36,left:"50%",transform:"translateX(-50%)",background:C.bgDark,color:"#fdf7f4",padding:"12px 28px",borderRadius:99,fontSize:13,fontWeight:500,boxShadow:C.shadowMd,zIndex:2000,whiteSpace:"nowrap",animation:"fadeUp .2s ease",letterSpacing:.3}}>{msg}</div>;
 };
 

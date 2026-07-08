@@ -102,7 +102,7 @@ function MainApp({lineUser,data,setData}){
         console.log("📡 客人端 Realtime status:", status);
       });
 
-    // 30 秒輪詢備援
+    // 60 秒輪詢備援
     const heartbeat = setInterval(() => { reloadData(); }, 60000);
 
     return()=>{ supabase.removeChannel(channel); clearInterval(heartbeat); };
@@ -115,8 +115,8 @@ function MainApp({lineUser,data,setData}){
     }
   }, [tab, reloadData]);
 
-  const myOrders=data.orders.filter(o=>(o.customer_line_id===lineUser.userId||o.customerId==="me")&&!o.archived);
-  const myWishes=data.wishlist.filter(w=>w.customer_line_id===lineUser.userId||w.customerId==="me");
+  const myOrders=data.orders.filter(o=>o.customer_line_id===lineUser.userId&&!o.archived);
+  const myWishes=data.wishlist.filter(w=>w.customer_line_id===lineUser.userId);
 
   const addToCart=item=>{
     const safe={...item,name:sanitize(item.name,100),price:safePrice(item.price)};
@@ -124,6 +124,7 @@ function MainApp({lineUser,data,setData}){
     setToast("已加入購物車 🛍");
   };
   const updateCartQty=(id,delta)=>setCart(p=>p.map(c=>c.id===id?{...c,qty:Math.max(1,Math.min(99,c.qty+delta))}:c));
+  const updateCartNote=(id,note)=>setCart(p=>p.map(c=>c.id===id?{...c,note:sanitize(note,200)}:c));
   const removeFromCart=id=>setCart(p=>p.filter(c=>c.id!==id));
 
   const submitOrder=async(payInfo={})=>{
@@ -247,7 +248,7 @@ function MainApp({lineUser,data,setData}){
 
       {/* Content */}
       {tab==="profile"&&<ProfileTab member={member} setMember={setMember} lineUser={lineUser} setToast={setToast}/>}
-      {tab==="catalog"&&<CatalogTab products={data.products} categories={data.categories} cart={cart} onAdd={addToCart} showCart={showCart} setShowCart={setShowCart} updateCartQty={updateCartQty} removeFromCart={removeFromCart} submitOrder={submitOrder} announcements={data.announcements} member={member} autoCancelHours={autoCancelHours}/>}
+      {tab==="catalog"&&<CatalogTab products={data.products} categories={data.categories} cart={cart} onAdd={addToCart} showCart={showCart} setShowCart={setShowCart} updateCartQty={updateCartQty} updateCartNote={updateCartNote} removeFromCart={removeFromCart} submitOrder={submitOrder} announcements={data.announcements} member={member} autoCancelHours={autoCancelHours}/>}
       {tab==="wishlist"&&<WishlistTab wishes={myWishes} onAddWish={addWish} onDeleteWish={deleteWish} onAddToCart={addToCart} setTab={setTab}/>}
       {tab==="orders"&&<OrdersTab orders={myOrders}/>}
       {tab==="shipments"&&<ShipmentsTab orders={myOrders} shopeeUrl={shopeeUrl}/>}

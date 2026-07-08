@@ -133,7 +133,7 @@ const DELIVERY = [
   { v:"delivery", l:"宅配",   storeLabel:"宅配地址",  storePh:"完整收件地址",     storeReq:true  },
 ];
 
-export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,updateCartQty,removeFromCart,submitOrder,announcements,member,autoCancelHours=36}){
+export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,updateCartQty,updateCartNote,removeFromCart,submitOrder,announcements,member,autoCancelHours=36}){
   const [activeCat,setActiveCat]=useState("all");
   const [search,setSearch]=useState("");
   const [selected,setSelected]=useState(null);
@@ -309,6 +309,8 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
                     </div>
                     <button onClick={()=>removeFromCart(item.id)} style={{background:"none",border:"none",color:C.faint,fontSize:20,cursor:"pointer"}}>×</button>
                   </div>
+                  <input value={item.note||""} onChange={e=>updateCartNote(item.id,e.target.value)} maxLength={200} placeholder="備註（尺寸/顏色/其他需求，選填）"
+                    style={{width:"100%",boxSizing:"border-box",marginBottom:12,padding:"7px 10px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:12,background:C.bgDeep,color:C.text}}/>
                   {i<cart.length-1&&<HR/>}
                 </div>
               ))}

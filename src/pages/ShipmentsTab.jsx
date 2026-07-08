@@ -8,7 +8,8 @@ import { fmtMoney, custOrderState, isImgSrc } from "../utils";
 
 export function ShipmentsTab({orders, shopeeUrl}){
   const [filter,setFilter]=useState("active"); // active=進行中 / done=已完成
-  const canCheckout = o => o.shipping_status === "arrived" || o.shipping_status === "shipped"; // 可結單(顯示賣貨便按鈕)
+  // 可結單(顯示賣貨便按鈕)：需已到台/已寄出，且取貨方式=賣貨便（面交/宅配不顯示）
+  const canCheckout = o => (o.shipping_status === "arrived" || o.shipping_status === "shipped") && (o.delivery_method || "shopee") === "shopee";
   const isDone      = o => o.shipping_status === "completed";           // 已完成
   const isActive    = o => o.status !== "cancelled" && !isDone(o);      // 進行中:其他
 

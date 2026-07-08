@@ -33,7 +33,7 @@ function OrderCard({ o, onChange }){
   const firstName = items[0] ? items[0].product_name + (items[0].spec?` / ${items[0].spec}`:"") : "—";
   const itemsLabel = items.length>1 ? `${firstName} 等 ${items.length} 件` : firstName;
 
-  const openEdit = () => { setForm({ deposit_paid:o.deposit_paid||0, deposit_last5:o.deposit_last5||"", deposit_bank:o.deposit_bank||"", cod_received:o.cod_received||0 }); setEditing(true); };
+  const openEdit = () => { setForm({ deposit_paid:o.deposit_paid||0, deposit_last5:o.deposit_last5||"", deposit_bank:o.deposit_bank||"", cod_received:o.cod_received||0, payment_method:o.payment_method||"full_payment", logistics:o.logistics||"", tracking_no:o.tracking_no||"", shipping_notes:o.shipping_notes||"" }); setEditing(true); };
   const setStage = async (stage) => { setBusy(true); await applyStage(o, stage); setBusy(false); onChange(); };
   const markPaid = async () => {   // 一鍵標記全額收齊：deposit_paid=total、cod_received=0 → 各付款方式皆判「已收齊」
     setBusy(true);
@@ -42,7 +42,7 @@ function OrderCard({ o, onChange }){
   };
   const savePayment = async () => {
     setBusy(true);
-    await supabase.from("orders").update({ deposit_paid:Number(form.deposit_paid)||0, deposit_last5:form.deposit_last5||"", deposit_bank:form.deposit_bank||"", cod_received:Number(form.cod_received)||0, updated_at:new Date().toISOString() }).eq("id", o.id);
+    await supabase.from("orders").update({ deposit_paid:Number(form.deposit_paid)||0, deposit_last5:form.deposit_last5||"", deposit_bank:form.deposit_bank||"", cod_received:Number(form.cod_received)||0, payment_method:form.payment_method||"full_payment", logistics:(form.logistics||"").slice(0,50), tracking_no:(form.tracking_no||"").slice(0,60), shipping_notes:(form.shipping_notes||"").slice(0,200), updated_at:new Date().toISOString() }).eq("id", o.id);
     setBusy(false); setEditing(false); onChange();
   };
   const delOrder = async () => { if(!window.confirm("確定刪除這張訂單？")) return; await supabase.from("orders").delete().eq("id", o.id); onChange(); };
@@ -150,6 +150,8 @@ function OrderCard({ o, onChange }){
               {o.recipient_name  && <div>收件人：{o.recipient_name}</div>}
               {o.recipient_phone && <div>電話：{o.recipient_phone}</div>}
               {o.recipient_store && <div>門市/地址：{o.recipient_store}</div>}
+              {(o.logistics || o.tracking_no) && <div>物流：{o.logistics} {o.tracking_no && `· 單號 ${o.tracking_no}`}</div>}
+              {o.shipping_notes && <div>出貨備註：{o.shipping_notes}</div>}
             </div>
           )}
 
@@ -157,6 +159,13 @@ function OrderCard({ o, onChange }){
           <div style={{fontSize:13,fontWeight:700,margin:"16px 0 8px"}}>付款紀錄</div>
           {editing ? (
             <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>
+              <div><div style={label}>付款方式</div>
+                <select value={form.payment_method} onChange={e=>setForm(f=>({...f,payment_method:e.target.value}))} style={{width:"100%",padding:"8px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,background:"#fff"}}>
+                  <option value="full_payment">一次付清</option>
+                  <option value="deposit_cod">訂金＋尾款貨到</option>
+                  <option value="full_cod">全額貨到付款</option>
+                </select>
+              </div>
               <div style={{display:"flex",gap:8}}>
                 <div style={{flex:1}}><div style={label}>已收訂金/匯款</div><input type="number" value={form.deposit_paid} onChange={e=>setForm(f=>({...f,deposit_paid:e.target.value}))} style={{width:"100%",padding:"8px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,boxSizing:"border-box"}}/></div>
                 <div style={{flex:1}}><div style={label}>末5碼</div><input value={form.deposit_last5} onChange={e=>setForm(f=>({...f,deposit_last5:e.target.value}))} style={{width:"100%",padding:"8px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,boxSizing:"border-box"}}/></div>
@@ -167,6 +176,12 @@ function OrderCard({ o, onChange }){
                 </select>
               </div>
               <div><div style={label}>已收貨到付款</div><input type="number" value={form.cod_received} onChange={e=>setForm(f=>({...f,cod_received:e.target.value}))} style={{width:"100%",padding:"8px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,boxSizing:"border-box"}}/></div>
+              {/* 物流 / 出貨 */}
+              <div style={{display:"flex",gap:8}}>
+                <div style={{flex:1}}><div style={label}>物流公司</div><input value={form.logistics} onChange={e=>setForm(f=>({...f,logistics:e.target.value}))} placeholder="黑貓 / 賣貨便…" style={{width:"100%",padding:"8px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,boxSizing:"border-box"}}/></div>
+                <div style={{flex:1}}><div style={label}>物流單號</div><input value={form.tracking_no} onChange={e=>setForm(f=>({...f,tracking_no:e.target.value}))} style={{width:"100%",padding:"8px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,boxSizing:"border-box"}}/></div>
+              </div>
+              <div><div style={label}>出貨備註</div><input value={form.shipping_notes} onChange={e=>setForm(f=>({...f,shipping_notes:e.target.value}))} style={{width:"100%",padding:"8px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,boxSizing:"border-box"}}/></div>
               <div style={{display:"flex",gap:8}}>
                 <button onClick={savePayment} disabled={busy} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}}>儲存</button>
                 <button onClick={()=>setEditing(false)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 16px",fontSize:13,cursor:"pointer",color:C.muted}}>取消</button>

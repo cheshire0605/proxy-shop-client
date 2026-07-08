@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../../supabase";
 import { C } from "../../theme";
-import { isImgSrc } from "../../utils";
+import { isImgSrc, fmtMoney } from "../../utils";
 
 export function WishlistPage(){
   const [list, setList] = useState([]);
@@ -82,7 +82,7 @@ export function WishlistPage(){
               ) : (
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <div>
-                    {w.price>0 ? <><div style={{ fontSize:13, color:C.muted }}>已回填報價</div><div style={{ fontSize:18, fontWeight:700, color:C.accent }}>NT$ {Number(w.price).toLocaleString()}</div></> : <div style={{ fontSize:13, color:C.muted }}>尚未回填報價</div>}
+                    {w.price>0 ? <><div style={{ fontSize:13, color:C.muted }}>已回填報價</div><div style={{ fontSize:18, fontWeight:700, color:C.accent }}>{fmtMoney(w.price)}</div></> : <div style={{ fontSize:13, color:C.muted }}>尚未回填報價</div>}
                     {w.found_note && <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{w.found_note}</div>}
                   </div>
                   <button onClick={()=>{ setEditId(w.id); setPrice(w.price?String(w.price):""); setNote(w.found_note||""); }} style={{ background:C.bgDeep, color:C.textMid, border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 14px", fontSize:12, cursor:"pointer" }}>{w.price>0?"修改報價":"填入報價"}</button>

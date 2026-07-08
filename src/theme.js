@@ -25,8 +25,6 @@ export const C = {
   blueBg:      "#eef3f8",
   purple:      "#5a4870",
   purpleBg:    "#f0eef8",
-  rose:        "#a05060",
-  roseBg:      "#fdf0f3",
   shadow:      "0 2px 16px rgba(44,31,23,0.06)",
   shadowMd:    "0 6px 32px rgba(44,31,23,0.10)",
   shadowLg:    "0 12px 48px rgba(44,31,23,0.14)",

@@ -38,7 +38,7 @@ export async function applyStage(order, stage){
   let patch = {};
   if (stage==="pending_review") patch = { status:"pending_review", shipping_status:"pending" };
   else if (stage==="to_purchase"||stage==="purchased") patch = { status:"active", shipping_status:"pending" };
-  else if (stage==="shipped") patch = { status:"active", shipping_status:"shipped" };
+  else if (stage==="shipped") patch = { status:"active", shipping_status:"shipped", shipped_at:new Date().toISOString() };
   else if (stage==="arrived") patch = { status:"active", shipping_status:"arrived" };
   else if (stage==="cancelled") patch = { status:"cancelled" };
   await supabase.from("orders").update({ ...patch, updated_at:new Date().toISOString() }).eq("id", order.id);

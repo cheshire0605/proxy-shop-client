@@ -32,6 +32,7 @@ export function AddOrderModal({ onClose, onCreated }){
   },[]);
   const _cs = customer.trim();
   const custMatches = allCust.filter(c=> !_cs || c.name.includes(_cs) || c.community.includes(_cs) || (c.phone||"").includes(_cs));
+  const [payMethod, setPayMethod] = useState("full_payment");
   const [payBank, setPayBank] = useState("");
   const [payAmount, setPayAmount] = useState("");
   const [payLast5, setPayLast5] = useState("");
@@ -52,6 +53,7 @@ export function AddOrderModal({ onClose, onCreated }){
     const p_order = {
       customer_name: customer.trim() || "手動客人",
       customer_line_id: customerLineId || "",   // 空 → RPC 自動產生 manual:xxx（臨時客人）
+      payment_method: payMethod,
       total,
       deposit_paid: Number(payAmount)||0,
       deposit_last5: payLast5||"",
@@ -118,6 +120,13 @@ export function AddOrderModal({ onClose, onCreated }){
       <button onClick={addRow} style={{ background:C.accentBg, color:C.accent, border:"none", borderRadius:8, padding:"8px", fontSize:13, fontWeight:600, cursor:"pointer", width:"100%", marginBottom:14 }}>＋ 加一項</button>
 
       <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>付款（選填）</div>
+      <div style={{ marginBottom:8 }}>
+        <select value={payMethod} onChange={e=>setPayMethod(e.target.value)} style={{ ...inp }}>
+          <option value="full_payment">一次付清</option>
+          <option value="deposit_cod">訂金＋尾款貨到</option>
+          <option value="full_cod">全額貨到付款</option>
+        </select>
+      </div>
       <div style={{ display:"flex", gap:8, marginBottom:14 }}>
         <select value={payBank} onChange={e=>setPayBank(e.target.value)} style={{ ...inp, flex:2 }}>
           <option value="">匯款銀行</option>{TW_BANKS.map(b=><option key={b.code} value={`${b.code} ${b.name}`}>{b.code} {b.name}</option>)}
