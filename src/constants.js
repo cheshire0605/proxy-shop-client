@@ -2,6 +2,10 @@ import { C } from "./theme";
 
 export const APP_NAME = "下單系統";
 
+// 7-11 賣貨便 EMap「電商代號」。公用測試值 870 可用來讓客人「選門市」；
+// 正式串接（用門市代號建立賣貨便寄件單）需換成自己的 eshopid。取得方式見 docs/7-11門市選取串接.md
+export const SEVEN_ESHOPID = "870";
+
 // 訂單/出貨狀態對照（供 StatusPill 顯示；涵蓋訂單層級與出貨層級的值）
 export const ORDER_STATUS = {
   pending_review: { label:"審核中",  color:C.blue,   bg:C.blueBg   },

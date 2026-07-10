@@ -23,6 +23,7 @@ export function SettingsPage(){
   const [email, setEmail] = useState("");
   const [jpyRate, setJpyRate] = useState("");
   const [shopeeUrl, setShopeeUrl] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
   const [autoCancelHours, setAutoCancelHours] = useState("36");
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState("");   // 哪個區塊儲存中
@@ -40,10 +41,12 @@ export function SettingsPage(){
       supabase.from("settings").select("value").eq("key","jpy_rate").maybeSingle(),
       supabase.from("settings").select("value").eq("key","shopee_ship_url").maybeSingle(),
       supabase.from("settings").select("value").eq("key","auto_cancel_hours").maybeSingle(),
-    ]).then(([r,s,c])=>{
+      supabase.from("settings").select("value").eq("key","bank_account").maybeSingle(),
+    ]).then(([r,s,c,b])=>{
       if(r.data?.value) setJpyRate(String(r.data.value));
       if(s.data?.value) setShopeeUrl(s.data.value);
       if(c.data?.value) setAutoCancelHours(String(c.data.value));
+      if(b.data?.value) setBankAccount(b.data.value);
       setLoading(false);
     }).catch(()=>setLoading(false));
   },[]);
@@ -58,6 +61,7 @@ export function SettingsPage(){
   };
   const saveRate = () => saveSetting("jpy_rate", Number(jpyRate)||0, "匯率已儲存 ✅");
   const saveShopee = () => saveSetting("shopee_ship_url", shopeeUrl.trim(), "賣貨便連結已儲存 ✅");
+  const saveBank = () => saveSetting("bank_account", bankAccount.trim(), "收款帳號已儲存 ✅");
   const saveCancel = () => { const h=Math.max(1,Math.min(720,Number(autoCancelHours)||36)); setAutoCancelHours(String(h)); saveSetting("auto_cancel_hours", h, `已設定 ${h} 小時後自動取消 ✅`); };
 
   const savePassword = async () => {
@@ -102,6 +106,15 @@ export function SettingsPage(){
           <label style={lab}>賣貨便商店連結</label>
           <input value={shopeeUrl} onChange={e=>setShopeeUrl(e.target.value)} placeholder="https://shopee.tw/m/你的賣貨便網址" style={{ ...inp, marginBottom:12 }} disabled={loading}/>
           <button onClick={saveShopee} disabled={savingKey==="shopee_ship_url"||loading} style={primaryBtn({width:"100%"})}>{savingKey==="shopee_ship_url"?"儲存中…":"儲存連結"}</button>
+        </div>
+
+        {/* 收款帳號 */}
+        <div style={secTitle}>🏦 收款帳號</div>
+        <div style={card}>
+          <div style={{ fontSize:13, color:C.muted, marginBottom:12, lineHeight:1.7 }}>會顯示在客人結帳的「匯款資訊」區,讓客人複製匯款。可填銀行代號＋帳號,或多行（多個帳號）。</div>
+          <label style={lab}>收款帳號</label>
+          <textarea value={bankAccount} onChange={e=>setBankAccount(e.target.value)} rows={3} placeholder={"例：\n(822) 中國信託 1234-5678-9012\n或 郵局 0001234-567890"} style={{ ...inp, marginBottom:12, resize:"vertical", fontFamily:"inherit", lineHeight:1.7 }} disabled={loading}/>
+          <button onClick={saveBank} disabled={savingKey==="bank_account"||loading} style={primaryBtn({width:"100%"})}>{savingKey==="bank_account"?"儲存中…":"儲存收款帳號"}</button>
         </div>
 
         {/* 自動取消 */}

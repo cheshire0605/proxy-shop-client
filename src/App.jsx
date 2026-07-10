@@ -22,13 +22,18 @@ const DEV_PREVIEW = import.meta.env.VITE_DEV_PREVIEW === "1";
 // ─── Main App ─────────────────────────────────────────────────────
 function MainApp({lineUser,data,setData}){
   const [tab,setTab]=useState("catalog");
-  const [cart,setCart]=useState([]);
+  // 購物車存 localStorage（依 LINE 使用者分開）→ 選 7-11 門市跳轉、或重整/切分頁都不遺失
+  const [cart,setCart]=useState(()=>{ try { const s=localStorage.getItem(`cart_${lineUser.userId}`); return s?JSON.parse(s):[]; } catch { return []; } });
   const [toast,setToast]=useState(null);
   const [member,setMember]=useState(null); // null=未載入, {}=載完但沒資料
   const [memberLoaded,setMemberLoaded]=useState(false);
   const [showCart,setShowCart]=useState(false);
   const [shopeeUrl,setShopeeUrl]=useState("");
+  const [bankAccount,setBankAccount]=useState("");
   const [autoCancelHours,setAutoCancelHours]=useState(36);
+
+  // 購物車變動 → 存回 localStorage（下單清空後也會同步寫入空陣列）
+  useEffect(()=>{ try { localStorage.setItem(`cart_${lineUser.userId}`, JSON.stringify(cart)); } catch {} }, [cart, lineUser.userId]);
 
   // 個資完整性檢查:四個必填欄位都要有值
   const isProfileComplete=!!(member?.community_name?.trim()&&member?.ig_threads?.trim()&&member?.recipient_name?.trim()&&member?.phone?.trim());
@@ -63,9 +68,11 @@ function MainApp({lineUser,data,setData}){
     Promise.all([
       supabase.from("settings").select("*").eq("key","shopee_ship_url").maybeSingle(),
       supabase.from("settings").select("*").eq("key","auto_cancel_hours").maybeSingle(),
-    ]).then(([s1,s2])=>{
+      supabase.from("settings").select("*").eq("key","bank_account").maybeSingle(),
+    ]).then(([s1,s2,s3])=>{
       if(s1.data?.value) setShopeeUrl(s1.data.value);
       if(s2.data?.value) setAutoCancelHours(Number(s2.data.value)||36);
+      if(s3.data?.value) setBankAccount(s3.data.value);
     }).catch(()=>{});
 
     const channel=supabase.channel("realtime-all")
@@ -248,7 +255,7 @@ function MainApp({lineUser,data,setData}){
 
       {/* Content */}
       {tab==="profile"&&<ProfileTab member={member} setMember={setMember} lineUser={lineUser} setToast={setToast}/>}
-      {tab==="catalog"&&<CatalogTab products={data.products} categories={data.categories} cart={cart} onAdd={addToCart} showCart={showCart} setShowCart={setShowCart} updateCartQty={updateCartQty} updateCartNote={updateCartNote} removeFromCart={removeFromCart} submitOrder={submitOrder} announcements={data.announcements} member={member} autoCancelHours={autoCancelHours}/>}
+      {tab==="catalog"&&<CatalogTab products={data.products} categories={data.categories} cart={cart} onAdd={addToCart} showCart={showCart} setShowCart={setShowCart} updateCartQty={updateCartQty} updateCartNote={updateCartNote} removeFromCart={removeFromCart} submitOrder={submitOrder} announcements={data.announcements} member={member} autoCancelHours={autoCancelHours} bankAccount={bankAccount}/>}
       {tab==="wishlist"&&<WishlistTab wishes={myWishes} onAddWish={addWish} onDeleteWish={deleteWish} onAddToCart={addToCart} setTab={setTab}/>}
       {tab==="orders"&&<OrdersTab orders={myOrders}/>}
       {tab==="shipments"&&<ShipmentsTab orders={myOrders} shopeeUrl={shopeeUrl}/>}

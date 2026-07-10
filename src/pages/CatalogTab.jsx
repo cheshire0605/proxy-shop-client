@@ -3,10 +3,10 @@ import { C } from "../theme";
 import { Card, Btn, Field, Sheet, HR } from "../components/ui";
 import { AnnouncementBar } from "../components/AnnouncementBar";
 import { fmtMoney, sanitize, safePrice, safeQty, secureUid, parseItemName, isImgSrc, formatShortDate } from "../utils";
-import { TW_BANKS } from "../constants";
+import { TW_BANKS, SEVEN_ESHOPID } from "../constants";
 
-// 現貨可賣量＝在手(stock)−已預約(reserved)；代購 stock=null 視為無限
-const availOf = v => v && v.stock!=null ? Math.max(0, Number(v.stock)-(Number(v.reserved)||0)) : null;
+// 可賣量＝在手(stock)−已預約(reserved)。現貨才用它擋量；代購(預購)在呼叫端以 type 視為無限
+const availOf = v => v ? Math.max(0, (Number(v.stock)||0)-(Number(v.reserved)||0)) : 0;
 
 // ─── 商品詳情（單一 SKU；variant.stock=null 代購無限、數字現貨庫存）──────
 function ProductSheet({product,onAdd,onClose}){
@@ -18,7 +18,7 @@ function ProductSheet({product,onAdd,onClose}){
   const sel=variants.find(v=>v.id===selId);
   const payType=isStock?"full":(product.payment_type||"full");   // 現貨一律全額
   const selDeposit=sel?Number(sel.deposit_amount)||0:0;
-  const selStock=availOf(sel);                                   // 可賣量；null=無限(代購)
+  const selStock=isStock?availOf(sel):null;                      // 現貨=可賣量擋量；代購(預購)=null 無限
   const maxQty=selStock==null?99:Math.max(0,selStock);
   const q=Math.min(qty,Math.max(1,maxQty));
   const prices=variants.map(v=>Number(v.price)||0).filter(x=>x>0);
@@ -71,7 +71,7 @@ function ProductSheet({product,onAdd,onClose}){
           <div style={{fontSize:13,fontWeight:500,marginBottom:8,color:C.textMid}}>規格</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
             {variants.map(v=>{
-              const av=availOf(v), so=av!=null&&av<=0, on=selId===v.id;
+              const av=isStock?availOf(v):null, so=av!=null&&av<=0, on=selId===v.id;
               return(
                 <button key={v.id} disabled={so} onClick={()=>{setSelId(v.id);setQty(1);}}
                   style={{padding:"8px 14px",borderRadius:99,fontSize:13,cursor:so?"not-allowed":"pointer",opacity:so?.45:1,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"transparent",color:on?C.accent:C.textMid,fontWeight:on?500:400}}>
@@ -133,7 +133,7 @@ const DELIVERY = [
   { v:"delivery", l:"宅配",   storeLabel:"宅配地址",  storePh:"完整收件地址",     storeReq:true  },
 ];
 
-export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,updateCartQty,updateCartNote,removeFromCart,submitOrder,announcements,member,autoCancelHours=36}){
+export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,updateCartQty,updateCartNote,removeFromCart,submitOrder,announcements,member,autoCancelHours=36,bankAccount=""}){
   const [activeCat,setActiveCat]=useState("all");
   const [search,setSearch]=useState("");
   const [selected,setSelected]=useState(null);
@@ -176,6 +176,42 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
     }catch(e){ console.warn("URL params error:",e); }
   },[products]);
 
+  // 7-11 賣貨便 EMap 選門市回傳：URL 帶 stCode/stName → 還原結帳表單 + 填門市 + 直接開回結帳
+  useEffect(()=>{
+    try{
+      const params=new URLSearchParams(window.location.search);
+      const stName=params.get("stName")||params.get("storename")||params.get("CVSStoreName");
+      const stCode=params.get("stCode")||params.get("storeid")||params.get("CVSStoreID");
+      if(!stName&&!stCode) return;
+      try{
+        const saved=sessionStorage.getItem("checkoutState");
+        if(saved){ const s=JSON.parse(saved);
+          if(s.payBank) setPayBank(s.payBank);
+          if(s.payAmount) setPayAmount(s.payAmount);
+          if(s.payLast5) setPayLast5(s.payLast5);
+          if(s.deliveryMethod) setDeliveryMethod(s.deliveryMethod);
+          if(s.ship) setShip(s.ship);
+          sessionStorage.removeItem("checkoutState");
+        }
+      }catch{}
+      const name=stName?decodeURIComponent(stName):"";
+      const storeText=(name+(stCode?`（${decodeURIComponent(stCode)}）`:"")).slice(0,100);
+      setShip(sh=>({...sh,recipient_store:storeText}));
+      setDeliveryMethod("shopee");
+      setShowCart(true); setStep("info");
+      const url=new URL(window.location);
+      ["stCode","stName","stAddr","storeid","storename","storeaddress","CVSStoreID","CVSStoreName","CVSAddress"].forEach(k=>url.searchParams.delete(k));
+      window.history.replaceState({},"",url);
+    }catch(e){ console.warn("EMap 回傳解析失敗:",e); }
+  },[]);
+
+  // 跳轉 7-11 官方門市地圖（EMap）選門市；先把結帳表單存 sessionStorage，回來還原
+  const openEMap=()=>{
+    try{ sessionStorage.setItem("checkoutState",JSON.stringify({ payBank, payAmount, payLast5, ship, deliveryMethod })); }catch{}
+    const returnUrl=window.location.origin+"/api/store-callback";
+    window.location.href=`https://emap.presco.com.tw/c2cemap.ashx?eshopid=${SEVEN_ESHOPID}&servicetype=1&url=${encodeURIComponent(returnUrl)}`;
+  };
+
   const doSubmit=()=>{
     setPayErr("");
     if(!ship.recipient_name.trim()){ setPayErr("請填收件人姓名"); return; }
@@ -196,6 +232,11 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
   const last5Err = (payLast5.length>0 && payLast5.length<5) ? "請填完整 5 碼" : "";
   const bd = (err,empty) => err ? C.red : (empty ? C.accent : C.border);   // 邊框色
   const dm = DELIVERY.find(d=>d.v===deliveryMethod) || DELIVERY[0];        // 目前取貨方式
+  // 現在應付（訂金＋全款；貨到付款不計）— 給匯款區塊顯示
+  const payNow = cart.reduce((s,c)=>{ const pt=c.payment_type||"full"; const t=safePrice(c.price)*safeQty(c.qty);
+    return pt==="deposit" ? s+Math.min((Number(c.deposit_amount)||0)*safeQty(c.qty),t) : pt==="cod" ? s : s+t; }, 0);
+  const [copied,setCopied] = useState("");
+  const copy = (text,tag) => { try{ navigator.clipboard.writeText(text); setCopied(tag); setTimeout(()=>setCopied(""),1500); }catch{} };
 
   const inCart=id=>cart.find(c=>c.id===id);
   const active=(products||[]).filter(p=>p.status==="on");
@@ -370,7 +411,6 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
                   {[
                     {key:"recipient_name",label:"收件人姓名",ph:"取件姓名"},
                     {key:"recipient_phone",label:"收件電話",ph:"09xxxxxxxx",check:v=>v&&!/^09\d{8}$/.test(v)?"電話須為 09 開頭、共 10 碼":""},
-                    {key:"recipient_store",label:dm.storeLabel,ph:dm.storePh},
                   ].map(f=>{
                     const err=f.check?f.check(ship[f.key].trim()):"";
                     return(
@@ -382,6 +422,19 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
                     </div>
                     );
                   })}
+                  {/* 取貨門市：賣貨便走 7-11 官方地圖選取；面交/宅配維持文字輸入 */}
+                  <div>
+                    <label style={{fontSize:11,color:C.textMid,display:"block",marginBottom:4}}>{dm.storeLabel}</label>
+                    {deliveryMethod==="shopee" ? (<>
+                      <button type="button" onClick={openEMap} style={{width:"100%",padding:"11px",border:`1.5px dashed ${C.accent}`,borderRadius:8,background:C.accentBg,color:C.accent,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:8}}>🗺 從地圖選 7-11 門市</button>
+                      <input value={ship.recipient_store} onChange={e=>setShip(s=>({...s,recipient_store:e.target.value}))} placeholder="或手動輸入 7-11 門市名稱"
+                        style={{width:"100%",padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:14,boxSizing:"border-box",background:"#fff",color:C.text}}/>
+                      <div style={{fontSize:10,color:C.faint,marginTop:4,lineHeight:1.5}}>地圖選好會自動填入上面欄位；若地圖打不開，直接手動輸入門市名稱即可（購物車會保留）</div>
+                    </>) : (
+                      <input value={ship.recipient_store} onChange={e=>setShip(s=>({...s,recipient_store:e.target.value}))} placeholder={dm.storePh}
+                        style={{width:"100%",padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:8,fontSize:14,boxSizing:"border-box",background:"#fff",color:C.text}}/>
+                    )}
+                  </div>
                   <div style={{fontSize:10,color:C.faint,lineHeight:1.6,padding:"4px 2px"}}>已自動帶入你的會員資料，可針對這張訂單修改</div>
                 </div>
               </div>
@@ -389,6 +442,21 @@ export function CatalogTab({products,categories,cart,onAdd,showCart,setShowCart,
               {/* 付款資訊輸入（必填） */}
               <div style={{background:C.bgDeep,borderRadius:C.rSm,padding:"14px 16px",marginBottom:12,border:`1px solid ${C.border}`}}>
                 <div style={{fontSize:11,color:C.muted,marginBottom:10,letterSpacing:.5,fontWeight:600}}>💰 匯款資訊 <span style={{color:C.accent,fontWeight:400}}>(必填)</span></div>
+
+                {/* 應匯金額 + 收款帳號（可複製）*/}
+                <div style={{background:C.accentBg,borderRadius:8,padding:"12px 14px",marginBottom:12,border:`1px solid ${C.accent}30`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:bankAccount?10:0}}>
+                    <div><div style={{fontSize:11,color:C.muted}}>應匯金額</div><div style={{fontSize:20,fontWeight:700,color:C.accent}}>{fmtMoney(payNow)}</div></div>
+                    <button type="button" onClick={()=>copy(String(payNow),"amt")} style={{border:`1px solid ${C.accent}`,background:"#fff",color:C.accent,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",flexShrink:0}}>{copied==="amt"?"已複製 ✓":"複製金額"}</button>
+                  </div>
+                  {bankAccount && (<div style={{borderTop:`1px solid ${C.accent}20`,paddingTop:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                      <div style={{flex:1,minWidth:0}}><div style={{fontSize:11,color:C.muted,marginBottom:3}}>匯款至</div><div style={{fontSize:13,color:C.text,whiteSpace:"pre-wrap",lineHeight:1.6,wordBreak:"break-all"}}>{bankAccount}</div></div>
+                      <button type="button" onClick={()=>copy(bankAccount,"acc")} style={{border:`1px solid ${C.accent}`,background:"#fff",color:C.accent,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",flexShrink:0}}>{copied==="acc"?"已複製 ✓":"複製帳號"}</button>
+                    </div>
+                  </div>)}
+                </div>
+
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   <div>
                     <label style={{fontSize:11,color:C.textMid,display:"block",marginBottom:4}}>付款銀行 *</label>
