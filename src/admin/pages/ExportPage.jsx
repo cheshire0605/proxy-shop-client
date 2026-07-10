@@ -62,12 +62,13 @@ export function ExportPage(){
       { label:"商品名稱", key:"product_name" },
       { label:"規格", key:"spec" },
       { label:"總訂購", key:"total_qty" },
-      { label:"已採買", key:"purchased_qty" },
-      { label:"未採買", key:"unpurchased_qty" },
-      { label:"缺貨", key:"out_of_stock_qty" },
+      { label:"在手", key:"on_hand_qty" },
+      { label:"已配", key:"allocated_qty" },
+      { label:"待分配池", key:"pool_qty" },
+      { label:"還缺", key:"shortage_qty" },
       { label:"相關訂單數", key:"order_count" },
       { label:"相關訂單編號", get:r=>Array.isArray(r.order_nos)?r.order_nos.join("、"):r.order_nos },
-      { label:"採買狀態", get:r=>PURCHASE_LABEL[r.summary_status]||r.summary_status },
+      { label:"配貨狀態", get:r=>PURCHASE_LABEL[r.summary_status]||r.summary_status },
     ];
     downloadCSV("配貨彙總採買清單.csv", toCSV(data||[], headers));
   };

@@ -51,7 +51,7 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
     setVariants(vs => [...vs, {
       id:`new_${Date.now()}_${vs.length}`, spec:newVar.spec, price:Number(newVar.price)||0,
       jpy_price: newVar.costMode==="jpy" ? (Number(newVar.jpy_price)||0) : 0,
-      cost, deposit_amount:0, stock: isStock ? 0 : null, status:"on",
+      cost, deposit_amount:0, stock: 0, status:"on",
     }]);
     setNewVar({ spec:"", price:"", costMode:"twd", cost:"", jpy_price:"" });
   };
@@ -74,10 +74,11 @@ function ProductEditor({ product, cats, globalRate, onClose, onSaved }){
       }
       // 新增/更新規格（成本另存 admin-only 的 variant_costs）
       for (const v of variants) {
-        const stock = isStock ? ((v.stock===""||v.stock==null)?0:Number(v.stock)) : null;
+        // 統一模型：所有 SKU 都有真實在手量。現貨用編輯器的庫存輸入；代購不顯示、沿用現有在手（進貨才會變動）
+        const stock = (v.stock===""||v.stock==null)?0:Number(v.stock);
         const payload = {
           product_id:product.id, spec:v.spec||"", price:Number(v.price)||0, deposit_amount:Number(v.deposit_amount)||0,
-          stock, status:(stock!=null&&stock<=0)?"sold_out":"on", updated_at:new Date().toISOString(),
+          stock, status: isStock ? (stock<=0?"sold_out":"on") : "on", updated_at:new Date().toISOString(),
         };
         let vid = v.id;
         if (String(v.id).startsWith("new_")) {
@@ -272,7 +273,7 @@ export function ProductsPage(){
   const addItem = async () => {
     const { data, error } = await supabase.from("products").insert([{ type:"proxy", name:"新商品", image:"", status:"off", rate:globalRate }]).select().single();
     if (error) { alert(error.message); return; }
-    await supabase.from("product_variants").insert([{ product_id:data.id, spec:"", price:0, stock:null }]);
+    await supabase.from("product_variants").insert([{ product_id:data.id, spec:"", price:0, stock:0 }]);
     const { data:full } = await supabase.from("products").select("*, variants:product_variants(*)").eq("id", data.id).single();
     setEditing(full);
   };
