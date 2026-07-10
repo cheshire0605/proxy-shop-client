@@ -61,7 +61,7 @@ function OrderCard({ o, onChange }){
     onChange();
   };
   const rejectOrder = async () => {
-    const reason = window.prompt("拒絕原因（選填，會記在訂單上；按取消放棄）：", "");
+    const reason = window.prompt("取消／拒絕原因（選填，會記在訂單上；按取消放棄）：", "");
     if (reason===null) return;
     setBusy(true);
     await supabase.from("orders").update({ cancel_reason:reason.slice(0,200), updated_at:new Date().toISOString() }).eq("id", o.id);
@@ -112,13 +112,23 @@ function OrderCard({ o, onChange }){
             <div><div style={label}>未付款</div><span style={{color:p.pending>0?C.amber:C.green}}>{fmtMoney(p.pending)}</span></div>
             <div><div style={label}>下單日期</div>{o.created_at?new Date(o.created_at).toLocaleDateString("zh-TW"):""}</div>
           </div>
-          {o.status==="cancelled" && o.cancel_reason && <div style={{fontSize:12,color:C.red,background:C.redBg,borderRadius:8,padding:"8px 12px",marginBottom:12}}>拒絕原因：{o.cancel_reason}</div>}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-            <span style={{fontSize:12,color:C.muted}}>更改狀態：</span>
-            <select value={stageOf(o)} disabled={busy} onChange={e=>setStage(e.target.value)} style={{padding:"7px 12px",border:`1.5px solid ${C.border}`,borderRadius:8,fontSize:13,background:"#fff"}}>
-              {STAGES.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-          </div>
+          {o.status==="cancelled" && o.cancel_reason && <div style={{fontSize:12,color:C.red,background:C.redBg,borderRadius:8,padding:"8px 12px",marginBottom:12}}>取消／拒絕原因：{o.cancel_reason}</div>}
+          {/* 狀態流程動作：正向按鈕（待採買/已採買由「接受」與「配貨採買」自動推導，不在此手動改）*/}
+          {stageOf(o)!=="cancelled" && (
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+              {stageOf(o)==="pending_review" ? (
+                <span style={{fontSize:12,color:C.muted}}>請於上方「✓ 接受訂單／✕ 拒絕」處理此單</span>
+              ) : (<>
+                {(stageOf(o)==="to_purchase"||stageOf(o)==="purchased") &&
+                  <button onClick={()=>setStage("shipped")} disabled={busy} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,fontWeight:600,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1}}>📦 標記已寄出</button>}
+                {stageOf(o)==="shipped" &&
+                  <button onClick={()=>setStage("arrived")} disabled={busy} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,fontWeight:600,cursor:busy?"not-allowed":"pointer",opacity:busy?.6:1}}>✈️ 標記已到台</button>}
+                {stageOf(o)==="arrived" &&
+                  <span style={{fontSize:12,color:C.green,fontWeight:600}}>✓ 已到台，流程完成</span>}
+                <button onClick={rejectOrder} disabled={busy} style={{marginLeft:"auto",background:"none",border:`1px solid ${C.border}`,color:C.muted,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:busy?"not-allowed":"pointer"}}>取消訂單</button>
+              </>)}
+            </div>
+          )}
 
           {/* 商品明細 */}
           <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>商品明細</div>

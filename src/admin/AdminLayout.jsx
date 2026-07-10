@@ -6,21 +6,30 @@ import { C } from "../theme";
 const IDLE_WARN_MS = 25 * 60 * 1000;  // 25 分警告
 const IDLE_OUT_MS  = 30 * 60 * 1000;  // 30 分自動登出
 
+// 依「使用頻率 + 功能」分組：每天營運 → 商品經營 → 報表紀錄 → 系統
 const NAV = [
-  { to: "/admin/orders",       label: "訂單管理", icon: "📋" },
-  { to: "/admin/distribution", label: "配貨採買", icon: "🛒" },
-  { to: "/admin/customers",    label: "客人",     icon: "👤" },
-  { to: "/admin/products",     label: "賣場",     icon: "🏪" },
-  { to: "/admin/categories",   label: "分類管理", icon: "🗂️" },
-  { to: "/admin/announcements", label: "公告管理", icon: "📢" },
-  { to: "/admin/wishlist",     label: "許願清單", icon: "⭐" },
-  { to: "/admin/instock",      label: "現貨/庫存", icon: "📦" },
-  { to: "/admin/stocklog",     label: "庫存異動", icon: "📊" },
-  { to: "/admin/revenue",      label: "營收報表", icon: "📈" },
-  { to: "/admin/export",       label: "匯出報表", icon: "📄" },
-  { to: "/admin/archive",      label: "封存區",   icon: "📦" },
-  { to: "/admin/settings",     label: "帳號設定", icon: "⚙️" },
-  { to: "/admin/auditlog",     label: "操作日誌", icon: "🛡️" },
+  { group: "營運", items: [
+    { to: "/admin/orders",       label: "訂單管理", icon: "📋" },
+    { to: "/admin/distribution", label: "配貨採買", icon: "🛒" },
+    { to: "/admin/instock",      label: "商品庫存", icon: "📦" },
+    { to: "/admin/customers",    label: "客人",     icon: "👤" },
+  ]},
+  { group: "商品經營", items: [
+    { to: "/admin/products",     label: "賣場",     icon: "🏪" },
+    { to: "/admin/categories",   label: "分類管理", icon: "🗂️" },
+    { to: "/admin/announcements", label: "公告管理", icon: "📢" },
+    { to: "/admin/wishlist",     label: "許願清單", icon: "⭐" },
+  ]},
+  { group: "報表與紀錄", items: [
+    { to: "/admin/revenue",      label: "營收報表", icon: "📈" },
+    { to: "/admin/export",       label: "匯出報表", icon: "📄" },
+    { to: "/admin/stocklog",     label: "庫存異動", icon: "📊" },
+    { to: "/admin/archive",      label: "封存區",   icon: "🗄️" },
+  ]},
+  { group: "系統", items: [
+    { to: "/admin/settings",     label: "帳號設定", icon: "⚙️" },
+    { to: "/admin/auditlog",     label: "操作日誌", icon: "🛡️" },
+  ]},
 ];
 
 export function AdminLayout(){
@@ -72,16 +81,21 @@ export function AdminLayout(){
               <span style={{fontSize:17,fontWeight:700,color:C.accent}}>代購後台</span>
               <button onClick={()=>setOpen(false)} aria-label="收合選單" style={{marginLeft:"auto",width:34,height:34,borderRadius:8,border:"none",background:C.bgDeep,color:C.muted,fontSize:15,cursor:"pointer"}}>✕</button>
             </div>
-            {/* 選單 */}
+            {/* 選單（依功能分組） */}
             <nav style={{display:"flex",flexDirection:"column",gap:4}}>
-              {NAV.map(n=>(
-                <NavLink key={n.to} to={n.to} onClick={()=>setOpen(false)} style={({isActive})=>({
-                  display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:12,textDecoration:"none",fontSize:15,
-                  fontWeight:isActive?700:500, color:isActive?"#fff":C.textMid, background:isActive?C.accent:"transparent",
-                })}>
-                  <span style={{fontSize:20,width:24,textAlign:"center"}}>{n.icon}</span>
-                  <span>{n.label}</span>
-                </NavLink>
+              {NAV.map((g,gi)=>(
+                <div key={g.group} style={{marginTop:gi===0?0:12}}>
+                  <div style={{fontSize:11,fontWeight:600,color:C.faint,letterSpacing:.5,padding:"0 16px 6px"}}>{g.group}</div>
+                  {g.items.map(n=>(
+                    <NavLink key={n.to} to={n.to} onClick={()=>setOpen(false)} style={({isActive})=>({
+                      display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:12,textDecoration:"none",fontSize:15,
+                      fontWeight:isActive?700:500, color:isActive?"#fff":C.textMid, background:isActive?C.accent:"transparent",
+                    })}>
+                      <span style={{fontSize:20,width:24,textAlign:"center"}}>{n.icon}</span>
+                      <span>{n.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
               ))}
             </nav>
             {/* 登出 */}
